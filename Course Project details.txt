@@ -1,0 +1,16 @@
+Course Project
+Your course project can take one of two forms:
+
+Practice (preferred): An implementation of RL in a domain of your choice---ideally one that you are using for research or in another class. In this case, please describe the domain and your initial plans for implementing learning. What will the states and actions be? What algorithm(s) do you expect to be most effective?
+
+Example: Implement a reinforcement learning agent to manage a greenhouse irrigation system. The state could include soil moisture levels, temperature, humidity, and sunlight exposure; the actions could be turning irrigation on or off at different intensities; and the reward could balance crop growth, water efficiency, and energy cost. You might compare tabular Q-learning with Deep Deterministic Policy Gradients (DDPG) to evaluate which achieves more stable performance.
+Theory: A proposal, implementation, and testing of an algorithmic modification or a new type of theoretical analysis for an RL algorithm presented in class. In this case, please describe the modification you propose to investigate and the type of domain (possibly a toy domain) where it is likely to show an improvement over the approaches discussed in the book or papers.
+
+Example 1: Propose a modification to the policy gradient algorithm by adding an adaptive learning rate schedule that depends on variance in the estimated returns. Test your modified algorithm on the CartPole environment to see whether it converges faster than the standard REINFORCE algorithm.
+
+Example 2: Conduct a theoretical analysis of Q-learning by studying its convergence properties under different exploration strategies (e.g., ε-greedy vs. softmax action selection). Provide formal arguments or proofs about how exploration choice affects sample complexity and long-term convergence, and support your claims with small-scale experiments on a toy environment such as GridWorld.
+You may build on chapters or research papers you have read (or will read) in class; you may reimplement something you've found interesting from others' work; you can try something entirely new; you may write new code from scratch or modify existing code. It's up to you!
+
+You are required to work in teams of two and are strongly encouraged to collaborate on all aspects together (i.e., pair programming rather than divide-and-conquer). Teams should submit only one copy of the project (only one team member should upload each file). However, each student must independently submit a short summary describing their individual contributions to the final product.
+
+You may build on existing work and use existing code (your own or code found online), but you must give proper attribution and clearly identify your new contribution. Any unattributed or uncited work will be considered a breach of academic honesty and handled according to the course policy in the syllabus. Furthermore, you may not claim your own existing work as a new contribution. You may extend your own prior work, but it must be cited as such and include new contributions for this class project.
