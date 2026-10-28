@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Local environment and editor files
+.venv/
+venv/
+.env
+.vscode/
+.idea/
+
+# Generated experiment outputs
+results/*
+!results/.gitkeep
+!results/README.md

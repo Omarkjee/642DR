@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Project itinerary and issue-ready tasks
+    url: https://github.com/Omarkjee/642DR/blob/main/docs/ITINERARY.md
+    about: See weekly milestones, due dates, and definitions of done.

@@ -1,0 +1,39 @@
+name: Project task
+description: Track an implementation, experiment, writing, or review task.
+title: "[TASK] "
+body:
+  - type: input
+    id: due-date
+    attributes:
+      label: Target date
+      description: Use YYYY-MM-DD, following docs/ITINERARY.md.
+      placeholder: "2026-11-08"
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: State the outcome and why it matters to the project.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Definition of done
+      description: List observable completion criteria and relevant tests or evidence.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: collaboration
+    attributes:
+      label: Pairing and review
+      description: Record the pair-programming session and who will review the result.
+  - type: textarea
+    id: references
+    attributes:
+      label: Related material
+      description: Link the project guide, proposal, paper, or related issue.
