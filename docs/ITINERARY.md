@@ -25,36 +25,37 @@ remaining days for final packaging and submission.
 ### Issue: Lock down the model and repository conventions
 **Target date:** Nov 1 · **Suggested labels:** `setup`, `model`
 
-- [ ] Review the proposal and survey against `PROJECT_GUIDE.md`.
-- [ ] Decide and document thermal-model units, timestep, comfort band,
+- [x] Review the proposal and survey against `PROJECT_GUIDE.md`.
+- [x] Decide and document thermal-model units, timestep, comfort band,
       occupancy schedule, price schedule, and what each HVAC action means.
-- [ ] Resolve the proposed state discretization and define a state key suitable
+- [x] Resolve the proposed state discretization and define a state key suitable
       for a Q table; estimate the number of reachable states.
-- [ ] Agree on test, formatting, configuration, and results-file conventions.
-- [ ] Record any changes from the proposal for the literature survey/report.
+- [x] Agree on test, formatting, configuration, and results-file conventions.
+- [x] Record any changes from the proposal for the literature survey/report.
 
 ### Issue: Finish and proofread the literature survey
 **Target date:** Nov 8 (submit by Nov 9) · **Suggested labels:** `writing`
 
-- [ ] Replace the survey's unfinished planning placeholders with final text.
-- [ ] Check that the summary describes the current project, not an earlier plan.
-- [ ] Verify at least 10 complete references and the technical comparison for
+- [x] Replace the survey's unfinished planning placeholders with final text.
+- [x] Check that the summary describes the current project, not an earlier plan.
+- [x] Verify at least 10 complete references and the technical comparison for
       each related-work item.
-- [ ] Confirm every cited work appears in the references and vice versa.
-- [ ] Proofread and submit according to the course instructions.
+- [x] Confirm every cited work appears in the references and vice versa.
+- [x] Proofread the editable source and rendered `litsurvey.pdf`; course upload
+      remains a team submission step.
 
 ## Week 2 — Environment and tests (Nov 2–8)
 
 ### Issue: Implement and validate the single-zone simulator
 **Target date:** Nov 8 · **Suggested labels:** `model`, `tests`
 
-- [ ] Implement the RC temperature update with documented, dimensionally
+- [x] Implement the RC temperature update with documented, dimensionally
       consistent parameters.
-- [ ] Add occupancy, outdoor-temperature, and time-of-use price schedules.
-- [ ] Define energy use/cost, comfort violation, and mode-switch calculations.
-- [ ] Test heating, cooling, passive drift, comfort, switching, and seeded
+- [x] Add occupancy, outdoor-temperature, and time-of-use price schedules.
+- [x] Define energy use/cost, comfort violation, and mode-switch calculations.
+- [x] Test heating, cooling, passive drift, comfort, switching, and seeded
       reproducibility with deterministic cases.
-- [ ] Add the Gymnasium interface and test `reset`/`step` observations, reward,
+- [x] Add the Gymnasium interface and test `reset`/`step` observations, reward,
       termination, and `info` metrics.
 
 ## Week 3 — Baselines and metrics (Nov 9–15)

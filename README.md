@@ -4,16 +4,17 @@ A CSCE 642 course project exploring whether a reinforcement-learning controller
 can anticipate occupancy and electricity-price changes better than a reactive
 thermostat, while balancing household comfort and energy cost.
 
-The project is being built by a team of two. The initial implementation is
-planned as a simulated, single-zone home with a resistor-capacitor (RC) thermal
-model, a tabular Q-learning agent, and controller baselines.
+The project is being built by a team of two. The initial implementation is a
+simulated, single-zone home with a resistor-capacitor (RC) thermal model, a
+tabular Q-learning agent, and controller baselines.
 
 ## Project status
 
-This repository currently contains the proposal, literature survey, project
-guidance, an experiment-configuration scaffold, and the work itinerary. The
-thermal simulator, controllers, learner, and experiment runner are planned work
-items; there is not yet a training command.
+The repository includes the project proposal and an editable literature survey,
+the documented simulation assumptions, a seeded Gymnasium single-zone
+thermostat environment, and validated experiment settings. Baseline controllers,
+Q-learning, and the experiment runner remain later milestones; `python -m
+thermostat_rl` currently prints settings and does not start training.
 
 ## Quick start
 
@@ -23,11 +24,12 @@ Requires Python 3.10 or newer.
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,docs]"
 cp .env.example .env               # Windows PowerShell: Copy-Item .env.example .env
 set -a && source .env && set +a    # Linux/macOS: export the example settings
 python -m thermostat_rl            # display the active experiment settings
-python -m unittest discover -s tests
+python -m pytest
+python -m black --check src tests scripts
 ```
 
 The `.env` file contains local, non-secret experiment settings. Do not commit
@@ -43,13 +45,19 @@ in `.env`, reload it in your shell before running Python.
 ├── configs/                  # Reserved for checked-in experiment configs
 ├── docs/
 │   ├── ITINERARY.md          # Week-by-week task list through Nov 29, 2026
-│   └── PROJECT_GUIDE.md      # Modeling, implementation, experiment, and writing guide
+│   ├── LITERATURE_SURVEY.md  # Editable, cited literature-survey source
+│   └── PROJECT_GUIDE.md      # Finalized model, state, test, and result conventions
+├── scripts/
+│   └── render_literature_survey.py
 ├── results/                  # Generated artifacts (kept out of Git)
 ├── src/thermostat_rl/
-│   ├── config.py             # Validated experiment settings
+│   ├── config.py             # Validated model and experiment settings
+│   ├── env.py                # Gymnasium single-zone thermal simulator
+│   ├── state.py              # Tabular state discretization and size estimate
 │   └── __main__.py           # Configuration check; not a training runner
 ├── tests/
-│   └── test_config.py
+│   ├── test_config.py
+│   └── test_env.py
 ├── .env.example
 ├── Course Project details.txt
 ├── CSCE 642_ Course Project.pdf
@@ -59,11 +67,33 @@ in `.env`, reload it in your shell before running Python.
 The source documents are retained in the repository: [Course Project
 details.txt](Course%20Project%20details.txt) is the course handout,
 [CSCE 642_ Course Project.pdf](CSCE%20642_%20Course%20Project.pdf) is the team
-proposal, and [litsurvey.pdf](litsurvey.pdf) is the literature-survey draft.
-See the [project guide](docs/PROJECT_GUIDE.md) for the proposed model,
-implementation conventions, and report expectations. See the
-[itinerary](docs/ITINERARY.md) for dated work items that can be copied into
-GitHub Issues.
+proposal, [docs/LITERATURE_SURVEY.md](docs/LITERATURE_SURVEY.md) is the
+editable survey source, and [litsurvey.pdf](litsurvey.pdf) is its rendered PDF.
+See the [project guide](docs/PROJECT_GUIDE.md) for the implemented model,
+state key, test conventions, and report expectations. See the
+[itinerary](docs/ITINERARY.md) for dated work items and completion status.
+
+## Simulator
+
+`ThermostatEnv` implements the one-hour RC model and five discrete HVAC
+actions. It follows Gymnasium's `reset`/`step` API, returns a seven-day episode,
+and reports per-step energy, cost, comfort, and mode-change metrics in `info`.
+The shared model parameters and state-space estimate are documented in the
+[project guide](docs/PROJECT_GUIDE.md). A small smoke run is:
+
+```python
+from thermostat_rl import ThermostatEnv
+
+env = ThermostatEnv()
+observation, info = env.reset(seed=42)
+observation, reward, terminated, truncated, info = env.step(env.action_space.sample())
+```
+
+Run `python -m pytest` to validate configuration, dynamics, schedules, rewards,
+determinism, state discretization, and the Gymnasium interface. Regenerate the
+survey PDF from its Markdown source with
+`python scripts/render_literature_survey.py`.
+Format Python with `python -m black src tests scripts`.
 
 ## Experiment settings
 

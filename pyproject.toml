@@ -17,7 +17,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "black>=24.0",
     "pytest>=8.0",
+]
+docs = [
+    "reportlab>=4.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -25,3 +29,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]

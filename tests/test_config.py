@@ -36,9 +36,7 @@ class ExperimentConfigTests(unittest.TestCase):
                 ExperimentConfig.from_env()
 
     def test_rejects_non_numeric_environment_value(self) -> None:
-        with patch.dict(
-            os.environ, {"THERMOSTAT_SEED": "many"}, clear=True
-        ):
+        with patch.dict(os.environ, {"THERMOSTAT_SEED": "many"}, clear=True):
             with self.assertRaisesRegex(ValueError, "must be an integer"):
                 ExperimentConfig.from_env()
 
@@ -48,10 +46,52 @@ class ExperimentConfigTests(unittest.TestCase):
                 ExperimentConfig.from_env()
 
     def test_rejects_non_finite_reward_weight(self) -> None:
-        with patch.dict(
-            os.environ, {"THERMOSTAT_COST_WEIGHT": "nan"}, clear=True
-        ):
+        with patch.dict(os.environ, {"THERMOSTAT_COST_WEIGHT": "nan"}, clear=True):
             with self.assertRaisesRegex(ValueError, "must be finite"):
+                ExperimentConfig.from_env()
+
+    def test_reads_thermal_model_environment_overrides(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "THERMOSTAT_TIME_STEP_HOURS": "1.0",
+                "THERMOSTAT_THERMAL_RESISTANCE_F_PER_KW": "3",
+                "THERMOSTAT_COMFORT_LOW_F": "67",
+            },
+            clear=True,
+        ):
+            config = ExperimentConfig.from_env()
+
+        self.assertEqual(config.time_step_hours, 1.0)
+        self.assertEqual(config.thermal_resistance_f_per_kw, 3.0)
+        self.assertEqual(config.comfort_low_f, 67.0)
+
+    def test_rejects_invalid_physical_parameters(self) -> None:
+        with patch.dict(os.environ, {"THERMOSTAT_TIME_STEP_HOURS": "0"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "TIME_STEP_HOURS"):
+                ExperimentConfig.from_env()
+
+    def test_rejects_non_hourly_time_step(self) -> None:
+        with patch.dict(os.environ, {"THERMOSTAT_TIME_STEP_HOURS": "0.5"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "schedules are hourly"):
+                ExperimentConfig.from_env()
+
+    def test_rejects_invalid_schedule(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"THERMOSTAT_WEEKDAY_AWAY_START_HOUR": "20"},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(ValueError, "away start hour"):
+                ExperimentConfig.from_env()
+
+    def test_rejects_invalid_comfort_band(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"THERMOSTAT_COMFORT_LOW_F": "80", "THERMOSTAT_COMFORT_HIGH_F": "70"},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(ValueError, "comfort band"):
                 ExperimentConfig.from_env()
 
 

@@ -13,9 +13,9 @@ indoor temperature and HVAC mode that the controller will observe later. The
 main comparison should be narrow and interpretable rather than spread across
 many stretch goals.
 
-## Proposed model
+## Finalized initial model
 
-The proposal describes a first-order RC-style thermal update:
+The first implementation uses this explicit-Euler, one-zone update:
 
 ```text
 T_indoor[t+1] = T_indoor[t]
@@ -24,23 +24,75 @@ T_indoor[t+1] = T_indoor[t]
               + noise[t]
 ```
 
-Before implementing the simulator, agree on units and parameter meanings so
-that temperature, time step, thermal resistance/capacitance, and HVAC power
-are dimensionally consistent. Keep the assumptions and chosen values in one
-configuration source and explain how they were selected in the report.
+The version-controlled starting values are in `.env.example` and validated by
+`ExperimentConfig`:
 
-The proposed observation includes indoor and outdoor temperature, time of day,
-occupancy, weekday/weekend, current HVAC mode, and price tier. The proposed
-discrete actions are off, low heat, high heat, low cool, and high cool. Start
-with a documented, coarse state discretization for tabular learning; do not
-silently combine impossible or ambiguous state bins.
+- `dt = 1 hour`; indoor and outdoor temperatures are in degrees Fahrenheit.
+- `R = 2 deg F/kW`; `C = 5 kWh/deg F`. Thus `dt/C` converts a kW heat flow to
+  degrees Fahrenheit and the passive time constant is `R*C = 10 hours`.
+- The signed HVAC thermal powers are `0`, `+3`, `+6`, `-3`, and `-6 kW` for
+  off, low heat, high heat, low cool, and high cool. Positive heats the zone.
+- Outdoor temperature repeats daily as `50 + 12*cos(2*pi*(hour-15)/24) deg F`.
+  This is a controlled synthetic weather profile, not measured weather.
+- The episode is one week (168 hourly steps). On weekdays, the home is away
+  from hour 8 inclusive to hour 18 exclusive; it is occupied at all hours on
+  weekends. Peak price is `$0.36/kWh` from hour 16 inclusive to hour 21
+  exclusive; the off-peak price is `$0.12/kWh`.
+- The occupied comfort band is `[68, 76] deg F`. Comfort is unpenalized while
+  unoccupied. Initial temperature is sampled from `N(72, 1 deg F)` and the
+  model adds seeded, per-step Gaussian noise with standard deviation `0.05 deg
+  F`.
+- Each HVAC action consumes `abs(power)*dt` kWh. Energy cost is energy times
+  the interval's price. Comfort violation is distance outside the occupied
+  band at the interval end times `dt`, in degree-hours. A mode change is a
+  change among off/heating/cooling; changing low/high power within one mode
+  does not count, but switching to or from off does.
+- The per-step reward is the negative weighted sum of cost in dollars,
+  occupied comfort violation in degree-hours, and a unit mode-change indicator.
+  The weights in `.env.example` are starting values, not empirical conclusions.
+- To keep the initial model small, electrical input is assumed equal to the
+  absolute HVAC thermal power (coefficient of performance 1). This is an
+  explicit simplification, not a realistic heat-pump efficiency model.
 
-The reward is the negative weighted sum of energy cost, occupant discomfort,
-and HVAC mode switching. Define those three quantities and their units before
-tuning weights. Comfort penalties should be occupancy-aware as proposed.
-Include the previous HVAC mode in the state if switching cost depends on it.
-Treat the values in `.env.example` as reproducible starting values, not
-evidence that a particular weighting is best.
+Model and reward assumptions are externalized through `THERMOSTAT_*` settings.
+The timestep is intentionally fixed at one hour while occupancy and tariff
+schedules are hour-based; other values are rejected rather than silently
+advancing the clock inconsistently. Invalid physical, schedule, comfort, and
+bin settings raise a `ValueError`.
+
+## State and action conventions
+
+The Gymnasium observation is a dictionary of indoor/outdoor temperature,
+hour, occupancy, day type (weekday/weekend), current HVAC mode, and price tier.
+The five discrete actions are off, low/high heat, and low/high cool. The
+tabular key is the tuple `(indoor_bin, outdoor_bin, hour, occupancy, day_type,
+hvac_mode, price_tier)`. Indoor temperature is binned in 2 deg F intervals
+over `[40, 92)` (26 bins); outdoor temperature uses 5 deg F intervals over
+`[-20, 80)` (20 bins). Values outside these ranges use the nearest edge bin.
+Hour is exact (24 values), mode has three values, and occupancy and price are
+retained in the key even though the deterministic schedules derive them from
+hour and day type.
+
+The naive product of feature cardinalities is `26*20*24*2*2*3*2 = 299,520`
+states. Because occupancy and price are fixed by the 48 hour/day-type
+combinations, the schedule-aware upper bound is `26*20*48*3 = 74,880` states
+or 374,400 state-action values. Physical reachability and finite training
+coverage are lower still; the agent must report observed table coverage rather
+than treating this bound as the number of learned states.
+
+## Code and result conventions
+
+- Keep simulation, discretization, and validated settings in
+  `src/thermostat_rl/`; add deterministic tests under `tests/`.
+- Use `pytest` as the test runner. Pure dynamics/schedule/reward tests should
+  disable temperature noise and set the initial temperature explicitly;
+  stochastic tests should use explicit seeds.
+- Format Python with Black using the repository's 88-character line limit.
+- Keep shared starting settings and their units in `.env.example`; use ignored
+  `.env` only for local overrides. Reward weights are experimental inputs, not
+  selected results.
+- Keep generated outputs under `results/`. Save machine-readable metrics and
+  the exact seed/scenario/configuration alongside any plots used in the report.
 
 ## Implementation sequence
 
