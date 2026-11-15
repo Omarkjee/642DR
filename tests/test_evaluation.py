@@ -28,6 +28,10 @@ def test_metrics_evaluate_controller():
     assert evaluation_results["occupied_comfort_percentage"] <= 100
     assert evaluation_results["HVAC_mode_changes"] >= 0
 
+    # make sure arrival temp deficit is also included
+    assert "arrival_temperature_deficit" in evaluation_results
+    assert evaluation_results["arrival_temperature_deficit"] >= 0
+
 # test the baselines
 def test_controller_baselines():
     """Run each baseline in the same scenarios with the same evaluation seeds"""
