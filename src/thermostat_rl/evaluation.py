@@ -2,14 +2,17 @@ from thermostat_rl.controllers import DeadbandController, RandomController
 from thermostat_rl.env import ThermostatEnv
 from thermostat_rl.config import ExperimentConfig
 from thermostat_rl.controllers import ScheduledSetbackController
+from collections import deque
 
 # need to calculate energy cost, comfort degree-hours, occupied comfort percentage, and HVAC mode changes
-
+# updating code to implement pre-transition energy
 def evaluate_controller(environment: ThermostatEnv, controller: DeadbandController | RandomController | ScheduledSetbackController, seed: int = 642) -> dict:
     """Calculate metrics to evaluate controller after one episode"""
     # reset environment, to make sure testing is accurate
     observation, _ = environment.reset(seed = seed)
     occupancy = observation["occupancy"]
+    # add/save price tier
+    price_tier = observation["price_tier"]
     
     # need to calculate energy cost, comfort degree-hours, occupied comfort percentage, and HVAC mode changes
     # save each metric into its own variable
@@ -22,6 +25,12 @@ def evaluate_controller(environment: ThermostatEnv, controller: DeadbandControll
     # add variables for arrival temperature deficit
     arrival_temp_deficit = 0.0
     occupancy_count = 0
+    # add variables for pre-transition energy
+    energy_kwh = 0.0
+    preTransition_energy_kwh = 0.0
+    energy_transition_k = 2 # 2 hour transition time
+    energy_kwh_history = deque(maxlen = energy_transition_k) # need to save the energy from previous timesteps
+    preTransition_energy_kwh_percentage = 0.0
 
     # episode will continue until the environment is either terminated or truncated
     bool_terminated = False
@@ -32,6 +41,26 @@ def evaluate_controller(environment: ThermostatEnv, controller: DeadbandControll
 
         # use the selected action
         observation, reward, bool_terminated, bool_truncated, info = environment.step(action_selected)
+
+        # add metrics for price tier
+        # want to know how much energy was used within the 2 hours before occupancy
+        energy_kwh += info["energy_kwh"]
+
+        # check if occupancy or price changed within those 2 hours
+        if occupancy != info["occupancy"]:
+            occupancy_change = True
+        else:
+            occupancy_change = False
+
+        if price_tier != info["price_tier"]:
+            price_change = True
+        else:
+            price_change = False
+        
+        # if occupancy or price changed, calculate by how much
+        if occupancy_change == True or price_change == True:
+            preTransition_energy_kwh += sum(energy_kwh_history)
+        energy_kwh_history.append(info["energy_kwh"])
 
         # update metric variables
         energy_cost += info["energy_cost_usd"]
@@ -60,8 +89,9 @@ def evaluate_controller(environment: ThermostatEnv, controller: DeadbandControll
                 # in comfortable range
                 arrival_temp_deficit += 0 
 
-        # save occupancy
+        # save occupancy and price tier
         occupancy = info["occupancy"]
+        price_tier = info["price_tier"]
 
     # after episode ends, still need to calculate one more metric
     # calc occupied comfort percentage
@@ -71,10 +101,15 @@ def evaluate_controller(environment: ThermostatEnv, controller: DeadbandControll
     # also calc arrival temperature deficit
     if occupancy_count > 0:
         arrival_temp_deficit = arrival_temp_deficit / occupancy_count
+
+    # need to also calculate pre-transition fraction
+    if energy_kwh > 0:
+        preTransition_energy_kwh_percentage = (preTransition_energy_kwh / energy_kwh) * 100
+    
     # return metric results
     evaluation_metrics_dict = {"seed": seed, "energy_cost_usd": energy_cost, "comfort_degree_hours": comfort_degree_hours,
                "occupied_comfort_percentage": occupied_comfort_percentage, "HVAC_mode_changes": HVAC_mode_changes,
-               "arrival_temperature_deficit": arrival_temp_deficit}
+               "arrival_temperature_deficit": arrival_temp_deficit, "preTransition_energy_kwh_percentage": preTransition_energy_kwh_percentage}
     return evaluation_metrics_dict
 
 # need to run baseline for random action and deadband controllers
