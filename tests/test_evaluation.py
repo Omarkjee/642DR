@@ -46,4 +46,7 @@ def test_controller_baselines():
     # results should add one entry per controller for each number in the seed_list
     for seed_i in seed_list:
         seed_i_results = [result for result in baseline_eval_results if result["seed"] == seed_i]
-        assert len(seed_i_results) == 2
+        #assert len(seed_i_results) == 2
+
+        # update test because added ScheduleSetbackController to baseline
+        assert len(seed_i_results) == 3

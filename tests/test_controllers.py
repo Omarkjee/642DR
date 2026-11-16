@@ -1,7 +1,7 @@
 from thermostat_rl.controllers import RandomController
 from thermostat_rl.env import HVACAction
 from thermostat_rl.config import ExperimentConfig
-from thermostat_rl.controllers import DeadbandController
+from thermostat_rl.controllers import DeadbandController, ScheduledSetbackController
 
 # need to test the two controller classes
 
@@ -96,3 +96,89 @@ def test_DeadbandController_turnOff_atHighestTemp():
 
     # check to see if the correct action was chosen
     assert HVAC_action == HVACAction.OFF
+
+# need to test the Setback controller
+def test_ScheduledSetbackController_turnOnHeat_occupied():
+    """Test the ScheduledSetbackController class when temperature is below the comfortable temperature range when environment is occupied"""
+    # use current environment config
+    comfort_setback_f = 4.0
+    config = ExperimentConfig()
+    test_controller = ScheduledSetbackController(config, comfort_setback_f = comfort_setback_f)
+
+    # test using temp that is slightly below the comfortable range
+    observation = {"indoor_temperature_f": config.comfort_low_f - 1.0, "occupancy": 1}
+    HVAC_action = test_controller.select_action(observation)
+
+    # check to see if the correct action was chosen
+    assert HVAC_action == HVACAction.HEAT_LOW
+
+def test_ScheduledSetbackController_dont_turnOnHeat_away():
+    """Test the ScheduledSetbackController class when temperature is within the eco comfortable temperature range when environment is not occupied"""
+    # use current environment config
+    comfort_setback_f = 4.0
+    config = ExperimentConfig()
+    test_controller = ScheduledSetbackController(config, comfort_setback_f = comfort_setback_f)
+
+    # test using temp that is within the extended eco comfortable range
+    observation = {"indoor_temperature_f": config.comfort_low_f - 1.0, "occupancy": 0}
+    HVAC_action = test_controller.select_action(observation)
+
+    # check to see if the correct action was chosen
+    assert HVAC_action == HVACAction.OFF
+
+def test_ScheduledSetbackController_do_turnOnHeat_away():
+    """Test the ScheduledSetbackController class when temperature is below the comfortable temperature range when environment is not occupied"""
+    # use current environment config
+    comfort_setback_f = 4.0
+    config = ExperimentConfig()
+    test_controller = ScheduledSetbackController(config, comfort_setback_f = comfort_setback_f)
+
+    # test using temp that is slightly below the extended eco comfortable range
+    observation = {"indoor_temperature_f": config.comfort_low_f - comfort_setback_f - 1.0, "occupancy": 0}
+    HVAC_action = test_controller.select_action(observation)
+
+    # check to see if the correct action was chosen
+    assert HVAC_action == HVACAction.HEAT_LOW
+
+# test ScheduleSetbackController cooling
+def test_ScheduledSetbackController_turnOnCooling_occupied():
+    """Test the ScheduledSetbackController class when temperature is above the comfortable temperature range when environment is occupied"""
+    # use current environment config
+    comfort_setback_f = 4.0
+    config = ExperimentConfig()
+    test_controller = ScheduledSetbackController(config, comfort_setback_f = comfort_setback_f)
+
+    # test using temp that is slightly above the comfortable range
+    observation = {"indoor_temperature_f": config.comfort_high_f + 1.0, "occupancy": 1}
+    HVAC_action = test_controller.select_action(observation)
+
+    # check to see if the correct action was chosen
+    assert HVAC_action == HVACAction.COOL_LOW
+
+def test_ScheduledSetbackController_dont_turnOnCooling_away():
+    """Test the ScheduledSetbackController class when temperature is within the eco comfortable temperature range when environment is not occupied"""
+    # use current environment config
+    comfort_setback_f = 4.0
+    config = ExperimentConfig()
+    test_controller = ScheduledSetbackController(config, comfort_setback_f = comfort_setback_f)
+
+    # test using temp that is within the extended eco comfortable range
+    observation = {"indoor_temperature_f": config.comfort_high_f + 1.0, "occupancy": 0}
+    HVAC_action = test_controller.select_action(observation)
+
+    # check to see if the correct action was chosen
+    assert HVAC_action == HVACAction.OFF
+
+def test_ScheduledSetbackController_do_turnOnCooling_away():
+    """Test the ScheduledSetbackController class when temperature is above the extended eco comfortable temperature range when environment is not occupied"""
+    # use current environment config
+    comfort_setback_f = 4.0
+    config = ExperimentConfig()
+    test_controller = ScheduledSetbackController(config, comfort_setback_f = comfort_setback_f)
+
+    # test using temp that is slightly above the extended eco comfortable range
+    observation = {"indoor_temperature_f": config.comfort_high_f + comfort_setback_f + 1.0, "occupancy": 0}
+    HVAC_action = test_controller.select_action(observation)
+
+    # check to see if the correct action was chosen
+    assert HVAC_action == HVACAction.COOL_LOW

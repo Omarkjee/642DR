@@ -1,10 +1,11 @@
 from thermostat_rl.controllers import DeadbandController, RandomController
 from thermostat_rl.env import ThermostatEnv
 from thermostat_rl.config import ExperimentConfig
+from thermostat_rl.controllers import ScheduledSetbackController
 
 # need to calculate energy cost, comfort degree-hours, occupied comfort percentage, and HVAC mode changes
 
-def evaluate_controller(environment: ThermostatEnv, controller: DeadbandController | RandomController, seed: int = 642) -> dict:
+def evaluate_controller(environment: ThermostatEnv, controller: DeadbandController | RandomController | ScheduledSetbackController, seed: int = 642) -> dict:
     """Calculate metrics to evaluate controller after one episode"""
     # reset environment, to make sure testing is accurate
     observation, _ = environment.reset(seed = seed)
@@ -78,8 +79,9 @@ def evaluate_controller(environment: ThermostatEnv, controller: DeadbandControll
 
 # need to run baseline for random action and deadband controllers
 # during testing, save a table to compare results
+# adding ScheduledSetbackController into baselines, so we can have 3 baseline controllers
 def controller_baselines(environment: ThermostatEnv, config: ExperimentConfig, seed_list: list[int]) -> list[dict]:
-    """Run the baseline for list of random action and deadband controllers"""
+    """Run the baseline for list of random action, deadband, and scheduled setback controllers"""
     # running on list of different seeds to see reproducibility
     baseline_results = []
     for seed_i in seed_list:
@@ -95,5 +97,11 @@ def controller_baselines(environment: ThermostatEnv, config: ExperimentConfig, s
         deadbandController_results = evaluate_controller(environment, deadband_controller, seed = seed_i)
         deadbandController_results["controller_type"] = "DeadbandController"
         baseline_results.append(deadbandController_results)
+
+        # add ScheduledSetbackController into baselines
+        scheduled_setback_controller = ScheduledSetbackController(config)
+        scheduledSetbackController_results = evaluate_controller(environment, scheduled_setback_controller, seed = seed_i)
+        scheduledSetbackController_results["controller_type"] = "ScheduledSetbackController"
+        baseline_results.append(scheduledSetbackController_results)
 
     return baseline_results
