@@ -32,6 +32,11 @@ def test_metrics_evaluate_controller():
     assert "arrival_temperature_deficit" in evaluation_results
     assert evaluation_results["arrival_temperature_deficit"] >= 0
 
+    # add test for pre-transition energy metrics
+    assert "preTransition_energy_kwh_percentage" in evaluation_results
+    assert evaluation_results["preTransition_energy_kwh_percentage"] >= 0
+    assert evaluation_results["preTransition_energy_kwh_percentage"] <= 100
+    
 # test the baselines
 def test_controller_baselines():
     """Run each baseline in the same scenarios with the same evaluation seeds"""
@@ -46,4 +51,7 @@ def test_controller_baselines():
     # results should add one entry per controller for each number in the seed_list
     for seed_i in seed_list:
         seed_i_results = [result for result in baseline_eval_results if result["seed"] == seed_i]
-        assert len(seed_i_results) == 2
+        #assert len(seed_i_results) == 2
+
+        # update test because added ScheduleSetbackController to baseline
+        assert len(seed_i_results) == 3
