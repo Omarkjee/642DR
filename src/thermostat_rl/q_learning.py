@@ -21,3 +21,17 @@ class TabularQLearning:
         if state not in self.q_table:
             self.q_table[state] = np.zeros(len(HVACAction))
         return self.q_table[state]
+
+    def select_action(self, state:StateKey) -> HVACAction:
+        """Based on epsilon-greedy selection, choose HVAC action"""
+        # get the current q_values
+        q_values = self.state_qValues(state)
+
+        # if random num is less than epsilon, choose a random HVAC action
+        if self.random_num.random() < self.epsilon:
+            random_action = self.random_num.integers(0, len(HVACAction))
+            return HVACAction(random_action)
+
+        # otherwise, choose best greedy action
+        best_greedy_action = np.argmax(q_values)
+        return HVACAction(best_greedy_action)
