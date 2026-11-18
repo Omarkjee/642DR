@@ -35,3 +35,18 @@ class TabularQLearning:
         # otherwise, choose best greedy action
         best_greedy_action = np.argmax(q_values)
         return HVACAction(best_greedy_action)
+
+    def update_qValue(self, state:StateKey, action: HVACAction, reward: float, next_state: StateKey) -> None:
+        """Update Q-value using the Q-learning equation"""
+        # get Q-values for current & next state
+        curr_q_values = self.state_qValues(state)
+        next_q_values = self.state_qValues(next_state)
+
+        # use given action to select Q-value, and best Q-value for next state
+        current_qValue = curr_q_values[action.value]
+        best_next_qValue = np.max(next_q_values)
+
+        # calc updated Q-value
+        # Q(s, a) ← Q(s, a) + η [r + γ*max_a′ Q(s′, a′) − Q(s, a)]
+        update_Q = current_qValue + self.config.learning_rate * (reward + self.config.discount_factor * best_next_qValue - current_qValue)
+        curr_q_values[action.value] = update_Q

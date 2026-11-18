@@ -72,3 +72,27 @@ def test_TabularQLearning_greedyEpsilon_one():
     # since we were selecting random actions, there should be more than one distinct HVACAction in the list
     # make sure it's not always just selecting the same action
     assert len(set(random_actions)) > 1
+
+def test_update_qValue():
+    """Test update_qValue() function"""
+    # initialize values
+    config = ExperimentConfig()
+    state = (0, 0, 0, 0, 0, 0, 0)
+    next_state = (1, 0, 0, 0, 0, 0, 0)
+    q_learning = TabularQLearning(config)
+
+    # add state to Q table before calling state_qValues()
+    q_learning.q_table[state] = np.array([6.0, 4.0, 2.0, 642.0, 64.2])
+    assert state in q_learning.q_table
+    q_learning.q_table[next_state] = np.array([6.0, 0.0, 4.0, 0.0, 2.0])
+    assert next_state in q_learning.q_table
+
+    # need to check if function is actually updating the Q-value
+    selected_action = HVACAction.HEAT_LOW
+    reward = 10.0   
+    current_qValue = q_learning.q_table[state][selected_action.value]
+    best_next_qValue = np.max(q_learning.q_table[next_state])
+    # Q(s, a) ← Q(s, a) + η [r + γ*max_a′ Q(s′, a′) − Q(s, a)]
+    expected_qValue = current_qValue + config.learning_rate * (reward + config.discount_factor * best_next_qValue - current_qValue)
+    q_learning.update_qValue(state, selected_action, reward, next_state)
+    assert np.isclose(q_learning.q_table[state][selected_action.value], expected_qValue)
