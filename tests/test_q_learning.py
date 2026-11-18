@@ -96,3 +96,29 @@ def test_update_qValue():
     expected_qValue = current_qValue + config.learning_rate * (reward + config.discount_factor * best_next_qValue - current_qValue)
     q_learning.update_qValue(state, selected_action, reward, next_state)
     assert np.isclose(q_learning.q_table[state][selected_action.value], expected_qValue)
+
+def test_epsilon_decay():
+    """Testing function for updating epsilon decay"""
+    # initialize values
+    config = ExperimentConfig()
+    q_learning = TabularQLearning(config)
+
+    # compare initial and decayed epsilon values
+    initial_epsilon = q_learning.epsilon
+    q_learning.update_epsilon_decay()
+    assert q_learning.epsilon < initial_epsilon
+    assert q_learning.epsilon > config.epsilon_min
+
+def test_repeated_epsilon_decay():
+    """Testing function for updating epsilon decay over multiple iterations"""
+    # initialize values
+    config = ExperimentConfig()
+    q_learning = TabularQLearning(config)
+
+    # compare initial and decayed epsilon values
+    initial_epsilon = q_learning.epsilon
+    for i in range(10000):
+        q_learning.update_epsilon_decay()
+
+    assert q_learning.epsilon < initial_epsilon
+    assert q_learning.epsilon == config.epsilon_min

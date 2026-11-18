@@ -50,3 +50,13 @@ class TabularQLearning:
         # Q(s, a) ← Q(s, a) + η [r + γ*max_a′ Q(s′, a′) − Q(s, a)]
         update_Q = current_qValue + self.config.learning_rate * (reward + self.config.discount_factor * best_next_qValue - current_qValue)
         curr_q_values[action.value] = update_Q
+
+    def update_epsilon_decay(self) -> None:
+        """When finding optimal action, step size η decays epsilon"""
+        # just need to update the epsilon value
+        # make it slightly smaller
+        update_epsilon = self.epsilon * self.config.epsilon_decay
+
+        # need to make sure it's not smaller than epsilon_min
+        self.epsilon = max(self.config.epsilon_min, update_epsilon)
+    
