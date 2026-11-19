@@ -163,3 +163,21 @@ def test_train_QLearning_episode():
     assert isinstance(final_reward, float)
     assert len(q_learning.q_table) > 0
     assert q_learning.epsilon < initial_epsilon
+
+def test_train_QLearning_multiple_episode():
+    """Testing function for full Q-Learning that trains with multiple episodes"""
+    # initialize values
+    config = ExperimentConfig(episodes=6)
+    environment = ThermostatEnv(config)
+    q_learning = TabularQLearning(config)
+
+    # compare initial and decayed epsilon values
+    initial_epsilon = q_learning.epsilon
+
+    # run full training
+    multiple_episode_reward = q_learning.train_QLearning(environment)
+
+    assert len(multiple_episode_reward) == 6
+    assert all(isinstance(curr_reward, float) for curr_reward in multiple_episode_reward)
+    assert len(q_learning.q_table) > 0
+    assert q_learning.epsilon < initial_epsilon

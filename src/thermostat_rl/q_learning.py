@@ -90,7 +90,7 @@ class TabularQLearning:
                 self.update_qValue(state, action_selected, reward, next_state, terminal_state=True)
             else: 
                 self.update_qValue(state, action_selected, reward, next_state)
-                
+
             # update reward
             final_reward += reward
 
@@ -102,3 +102,17 @@ class TabularQLearning:
 
         return final_reward
 
+    # multiple episodes
+    def train_QLearning(self, environment: ThermostatEnv) -> list[float]:
+        """Train Tabular Q-Learning using multiple episodes"""
+        # save results from each episode into a list
+        multiple_episode_rewards = []
+
+        # loop through multiple episodes
+        for curr_episode in range(self.config.episodes):
+            # slightly change seed, so each episode doesn't give the exact same reward
+            curr_episode_seed = self.config.seed + curr_episode
+            curr_reward = self.train_QLearning_episode(environment, seed = curr_episode_seed)
+            multiple_episode_rewards.append(curr_reward)
+
+        return multiple_episode_rewards
