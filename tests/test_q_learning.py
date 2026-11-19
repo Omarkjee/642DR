@@ -3,6 +3,7 @@ from thermostat_rl.config import ExperimentConfig
 from thermostat_rl.state import StateKey
 from thermostat_rl.q_learning import TabularQLearning
 import numpy as np
+from thermostat_rl.env import ThermostatEnv
 
 def test_state_qValues_newState():
     """Testing state_qValues() when state is not in the Q table yet"""
@@ -122,3 +123,43 @@ def test_repeated_epsilon_decay():
 
     assert q_learning.epsilon < initial_epsilon
     assert q_learning.epsilon == config.epsilon_min
+
+def test_update_qValue_terminalState():
+    # initialize values
+    config = ExperimentConfig()
+    state = (0, 0, 0, 0, 0, 0, 0)
+    next_state = (1, 0, 0, 0, 0, 0, 0)
+    q_learning = TabularQLearning(config)
+
+    # add state to Q table before calling state_qValues()
+    q_learning.q_table[state] = np.array([6.0, 4.0, 2.0, 642.0, 64.2])
+    assert state in q_learning.q_table
+    q_learning.q_table[next_state] = np.array([600.0, 0.0, 400.0, 0.0, 200.0])
+    assert next_state in q_learning.q_table
+
+    # need to check if function is actually updating the Q-value
+    selected_action = HVACAction.HEAT_LOW
+    reward = 10.0   
+    current_qValue = q_learning.q_table[state][selected_action.value]
+    
+    # Q(s, a) ← Q(s, a) + η [r + γ*max_a′ Q(s′, a′) − Q(s, a)]
+    # (config.discount_factor * best_next_qValue) = 0 when at terminal state, so removed it from equation
+    expected_qValue = current_qValue + config.learning_rate * (reward - current_qValue)
+    q_learning.update_qValue(state, selected_action, reward, next_state, terminal_state=True)
+    assert np.isclose(q_learning.q_table[state][selected_action.value], expected_qValue)
+
+def test_train_QLearning_episode():
+    """Testing function for running one training episode for Q-Learning"""
+    # initialize values
+    config = ExperimentConfig()
+    environment = ThermostatEnv(config)
+    q_learning = TabularQLearning(config)
+
+    # compare initial and decayed epsilon values
+    initial_epsilon = q_learning.epsilon
+
+    # train for one episode and make sure the values are valid afterwards
+    final_reward = q_learning.train_QLearning_episode(environment, seed=642)
+    assert isinstance(final_reward, float)
+    assert len(q_learning.q_table) > 0
+    assert q_learning.epsilon < initial_epsilon
