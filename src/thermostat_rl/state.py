@@ -23,13 +23,13 @@ def discretize_observation(
     config = config or ExperimentConfig()
     return (
         _temperature_bin(
-            float(observation["indoor_temperature_f"]),
+            float(observation["indoor_temperature_f"][0]),
             config.indoor_temperature_bin_min_f,
             config.indoor_temperature_bin_max_f,
             config.indoor_temperature_bin_width_f,
         ),
         _temperature_bin(
-            float(observation["outdoor_temperature_f"]),
+            float(observation["outdoor_temperature_f"][0]),
             config.outdoor_temperature_bin_min_f,
             config.outdoor_temperature_bin_max_f,
             config.outdoor_temperature_bin_width_f,

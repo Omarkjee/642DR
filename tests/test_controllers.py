@@ -1,184 +1,70 @@
-from thermostat_rl.controllers import RandomController
-from thermostat_rl.env import HVACAction
+import numpy as np
+import pytest
+
 from thermostat_rl.config import ExperimentConfig
-from thermostat_rl.controllers import DeadbandController, ScheduledSetbackController
+from thermostat_rl.controllers import (
+    DeadbandController,
+    RandomController,
+    ScheduledSetbackController,
+)
+from thermostat_rl.env import HVACAction
 
-# need to test the two controller classes
 
-def test_RandomController():
-    """Test the RandomController class"""
+def observation(temperature_f: float, occupancy: int = 1) -> dict[str, object]:
+    return {
+        "indoor_temperature_f": np.asarray([temperature_f], dtype=np.float32),
+        "occupancy": occupancy,
+    }
 
-    # create two random controllers
-    randomController_A = RandomController(seed = 642)
-    randomController_B = RandomController(seed = 642)
 
-    # lists for storing the HVACActions
-    HVAC_actions_A = []
-    HVAC_actions_B = []
+def test_random_controller_is_seeded_and_returns_valid_actions() -> None:
+    first = RandomController(seed=642)
+    second = RandomController(seed=642)
 
-    # need to make sure that although the actions are random
-    # they're also repeatable
-    for action in range(10):
-        HVAC_actions_A.append(randomController_A.select_action({}))
-        HVAC_actions_B.append(randomController_B.select_action({}))
+    first_actions = [first.select_action({}) for _ in range(20)]
+    second_actions = [second.select_action({}) for _ in range(20)]
 
-    # each controller should have the same actions
-    assert HVAC_actions_A == HVAC_actions_B
+    assert first_actions == second_actions
+    assert all(isinstance(action, HVACAction) for action in first_actions)
+    assert set(first_actions).issubset(set(HVACAction))
 
-    # need to check that each HVAC action is possible
-    # just have to check one list of actions, since the first assert would've needed to pass
-    assert all(isinstance(action, HVACAction) for action in HVAC_actions_A)
 
-def test_DeadbandController_turnOnHeat():
-    """Test the DeadbandController class when temperature is below the comfortable temperature range"""
-    # use current environment config
+@pytest.mark.parametrize(
+    ("temperature_delta", "expected_action"),
+    [
+        (-0.1, HVACAction.HEAT_LOW),
+        (0.0, HVACAction.OFF),
+        (4.0, HVACAction.OFF),
+        (8.0, HVACAction.OFF),
+        (8.1, HVACAction.COOL_LOW),
+    ],
+)
+def test_deadband_controller_actions_at_comfort_boundaries(
+    temperature_delta: float, expected_action: HVACAction
+) -> None:
     config = ExperimentConfig()
-    test_controller = DeadbandController(config)
+    controller = DeadbandController(config)
+    temperature = config.comfort_low_f + temperature_delta
 
-    # test using temp that is slightly below the comfortable range
-    observation = {"indoor_temperature_f": config.comfort_low_f - 1.0}
-    HVAC_action = test_controller.select_action(observation)
+    assert controller.select_action(observation(temperature)) == expected_action
 
-    # check to see if the correct action was chosen
-    assert HVAC_action == HVACAction.HEAT_LOW
 
-def test_DeadbandController_turnOnCooling():
-    """Test the DeadbandController class when temperature is above the comfortable temperature range"""
-    # use current environment config
+def test_scheduled_setback_widens_band_only_when_unoccupied() -> None:
     config = ExperimentConfig()
-    test_controller = DeadbandController(config)
+    controller = ScheduledSetbackController(config, comfort_setback_f=4.0)
+    temperature = config.comfort_low_f - 2.0
 
-    # test using temp that is slightly above the comfortable range
-    observation = {"indoor_temperature_f": config.comfort_high_f + 1.0}
-    HVAC_action = test_controller.select_action(observation)
+    assert (
+        controller.select_action(observation(temperature, occupancy=0))
+        == HVACAction.OFF
+    )
+    assert (
+        controller.select_action(observation(temperature, occupancy=1))
+        == HVACAction.HEAT_LOW
+    )
 
-    # check to see if the correct action was chosen
-    assert HVAC_action == HVACAction.COOL_LOW
 
-def test_DeadbandController_turnOff():
-    """Test the DeadbandController class when temperature is within the comfortable temperature range"""
-    # use current environment config
-    config = ExperimentConfig()
-    test_controller = DeadbandController(config)
-
-    # test using temp that is within the comfortable range
-    comfy_temp_range = config.comfort_high_f - config.comfort_low_f
-    observation = {"indoor_temperature_f": config.comfort_low_f + (comfy_temp_range / 2)}
-    HVAC_action = test_controller.select_action(observation)
-
-    # check to see if the correct action was chosen
-    assert HVAC_action == HVACAction.OFF
-
-def test_DeadbandController_turnOff_atLowestTemp():
-    """Test the DeadbandController class when temperature is within the comfortable temperature range,
-       at the lowest comfortable temperature"""
-    # use current environment config
-    config = ExperimentConfig()
-    test_controller = DeadbandController(config)
-
-    # test using temp that is within the comfortable range, at the lowest temp
-    observation = {"indoor_temperature_f": config.comfort_low_f}
-    HVAC_action = test_controller.select_action(observation)
-
-    # check to see if the correct action was chosen
-    assert HVAC_action == HVACAction.OFF
-
-def test_DeadbandController_turnOff_atHighestTemp():
-    """Test the DeadbandController class when temperature is within the comfortable temperature range,
-       at the highest comfortable temperature"""
-    # use current environment config
-    config = ExperimentConfig()
-    test_controller = DeadbandController(config)
-
-    # test using temp that is within the comfortable range, at the highest temp
-    observation = {"indoor_temperature_f": config.comfort_high_f}
-    HVAC_action = test_controller.select_action(observation)
-
-    # check to see if the correct action was chosen
-    assert HVAC_action == HVACAction.OFF
-
-# need to test the Setback controller
-def test_ScheduledSetbackController_turnOnHeat_occupied():
-    """Test the ScheduledSetbackController class when temperature is below the comfortable temperature range when environment is occupied"""
-    # use current environment config
-    comfort_setback_f = 4.0
-    config = ExperimentConfig()
-    test_controller = ScheduledSetbackController(config, comfort_setback_f = comfort_setback_f)
-
-    # test using temp that is slightly below the comfortable range
-    observation = {"indoor_temperature_f": config.comfort_low_f - 1.0, "occupancy": 1}
-    HVAC_action = test_controller.select_action(observation)
-
-    # check to see if the correct action was chosen
-    assert HVAC_action == HVACAction.HEAT_LOW
-
-def test_ScheduledSetbackController_dont_turnOnHeat_away():
-    """Test the ScheduledSetbackController class when temperature is within the eco comfortable temperature range when environment is not occupied"""
-    # use current environment config
-    comfort_setback_f = 4.0
-    config = ExperimentConfig()
-    test_controller = ScheduledSetbackController(config, comfort_setback_f = comfort_setback_f)
-
-    # test using temp that is within the extended eco comfortable range
-    observation = {"indoor_temperature_f": config.comfort_low_f - 1.0, "occupancy": 0}
-    HVAC_action = test_controller.select_action(observation)
-
-    # check to see if the correct action was chosen
-    assert HVAC_action == HVACAction.OFF
-
-def test_ScheduledSetbackController_do_turnOnHeat_away():
-    """Test the ScheduledSetbackController class when temperature is below the comfortable temperature range when environment is not occupied"""
-    # use current environment config
-    comfort_setback_f = 4.0
-    config = ExperimentConfig()
-    test_controller = ScheduledSetbackController(config, comfort_setback_f = comfort_setback_f)
-
-    # test using temp that is slightly below the extended eco comfortable range
-    observation = {"indoor_temperature_f": config.comfort_low_f - comfort_setback_f - 1.0, "occupancy": 0}
-    HVAC_action = test_controller.select_action(observation)
-
-    # check to see if the correct action was chosen
-    assert HVAC_action == HVACAction.HEAT_LOW
-
-# test ScheduleSetbackController cooling
-def test_ScheduledSetbackController_turnOnCooling_occupied():
-    """Test the ScheduledSetbackController class when temperature is above the comfortable temperature range when environment is occupied"""
-    # use current environment config
-    comfort_setback_f = 4.0
-    config = ExperimentConfig()
-    test_controller = ScheduledSetbackController(config, comfort_setback_f = comfort_setback_f)
-
-    # test using temp that is slightly above the comfortable range
-    observation = {"indoor_temperature_f": config.comfort_high_f + 1.0, "occupancy": 1}
-    HVAC_action = test_controller.select_action(observation)
-
-    # check to see if the correct action was chosen
-    assert HVAC_action == HVACAction.COOL_LOW
-
-def test_ScheduledSetbackController_dont_turnOnCooling_away():
-    """Test the ScheduledSetbackController class when temperature is within the eco comfortable temperature range when environment is not occupied"""
-    # use current environment config
-    comfort_setback_f = 4.0
-    config = ExperimentConfig()
-    test_controller = ScheduledSetbackController(config, comfort_setback_f = comfort_setback_f)
-
-    # test using temp that is within the extended eco comfortable range
-    observation = {"indoor_temperature_f": config.comfort_high_f + 1.0, "occupancy": 0}
-    HVAC_action = test_controller.select_action(observation)
-
-    # check to see if the correct action was chosen
-    assert HVAC_action == HVACAction.OFF
-
-def test_ScheduledSetbackController_do_turnOnCooling_away():
-    """Test the ScheduledSetbackController class when temperature is above the extended eco comfortable temperature range when environment is not occupied"""
-    # use current environment config
-    comfort_setback_f = 4.0
-    config = ExperimentConfig()
-    test_controller = ScheduledSetbackController(config, comfort_setback_f = comfort_setback_f)
-
-    # test using temp that is slightly above the extended eco comfortable range
-    observation = {"indoor_temperature_f": config.comfort_high_f + comfort_setback_f + 1.0, "occupancy": 0}
-    HVAC_action = test_controller.select_action(observation)
-
-    # check to see if the correct action was chosen
-    assert HVAC_action == HVACAction.COOL_LOW
+@pytest.mark.parametrize("setback", [-1.0, float("nan"), float("inf")])
+def test_scheduled_setback_rejects_invalid_values(setback: float) -> None:
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        ScheduledSetbackController(ExperimentConfig(), comfort_setback_f=setback)

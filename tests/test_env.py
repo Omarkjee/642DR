@@ -48,6 +48,34 @@ class ThermostatEnvTests(unittest.TestCase):
 
         self.assertEqual(info["step"], 167)
 
+    def test_temperature_observations_support_valid_custom_model_parameters(
+        self,
+    ) -> None:
+        config = self.make_config(
+            outdoor_temperature_mean_f=500.0,
+            outdoor_temperature_amplitude_f=100.0,
+            cooling_high_kw=100.0,
+        )
+        env = ThermostatEnv(config)
+        observation, _ = env.reset(seed=42)
+
+        self.assertTrue(env.observation_space.contains(observation))
+        observation, _, _, _, _ = env.step(HVACAction.COOL_HIGH)
+
+        self.assertTrue(env.observation_space.contains(observation))
+
+    def test_reset_supports_custom_initial_temperature_and_rejects_non_finite(
+        self,
+    ) -> None:
+        env = ThermostatEnv(self.make_config())
+
+        observation, _ = env.reset(seed=42, options={"initial_temperature_f": -20.0})
+
+        self.assertEqual(float(observation["indoor_temperature_f"][0]), -20.0)
+        self.assertTrue(env.observation_space.contains(observation))
+        with self.assertRaisesRegex(ValueError, "finite and fit in float32"):
+            env.reset(seed=42, options={"initial_temperature_f": float("nan")})
+
     def test_gymnasium_environment_checker(self) -> None:
         check_env(
             ThermostatEnv(self.make_config(steps_per_episode=8)),
@@ -63,27 +91,42 @@ class ThermostatEnvTests(unittest.TestCase):
             config.time_step_hours
             / config.thermal_capacitance_kwh_per_f
             * (
-                (observation["outdoor_temperature_f"] - 70.0)
+                (float(observation["outdoor_temperature_f"][0]) - 70.0)
                 / config.thermal_resistance_f_per_kw
             )
         )
         heated, *_ = env.step(HVACAction.HEAT_LOW)
         expected_heating = passive_change + (
-            3.0 * config.time_step_hours / config.thermal_capacitance_kwh_per_f
+            config.heating_low_kw
+            * config.time_step_hours
+            / config.thermal_capacitance_kwh_per_f
         )
         self.assertAlmostEqual(
-            heated["indoor_temperature_f"] - 70.0, expected_heating, places=5
+            float(heated["indoor_temperature_f"][0]) - 70.0,
+            expected_heating,
+            places=5,
         )
 
-        env.reset(seed=1, options={"initial_temperature_f": 70.0})
+        observation, _ = env.reset(seed=1, options={"initial_temperature_f": 70.0})
         cooled, *_ = env.step(HVACAction.COOL_LOW)
-        expected_cooling = passive_change + (
-            -3.0 * config.time_step_hours / config.thermal_capacitance_kwh_per_f
+        expected_cooling = (
+            config.time_step_hours
+            / config.thermal_capacitance_kwh_per_f
+            * (
+                (float(observation["outdoor_temperature_f"][0]) - 70.0)
+                / config.thermal_resistance_f_per_kw
+                - config.cooling_low_kw
+            )
         )
         self.assertAlmostEqual(
-            cooled["indoor_temperature_f"] - 70.0, expected_cooling, places=5
+            float(cooled["indoor_temperature_f"][0]) - 70.0,
+            expected_cooling,
+            places=5,
         )
-        self.assertLess(cooled["indoor_temperature_f"], heated["indoor_temperature_f"])
+        self.assertLess(
+            float(cooled["indoor_temperature_f"][0]),
+            float(heated["indoor_temperature_f"][0]),
+        )
 
     def test_passive_drift_matches_rc_equation(self) -> None:
         config = self.make_config()
@@ -101,17 +144,17 @@ class ThermostatEnvTests(unittest.TestCase):
         )
 
         self.assertAlmostEqual(
-            next_observation["indoor_temperature_f"]
-            - observation["indoor_temperature_f"],
+            float(next_observation["indoor_temperature_f"][0])
+            - float(observation["indoor_temperature_f"][0]),
             expected_change,
             places=5,
         )
-        self.assertLess(next_observation["indoor_temperature_f"], 72.0)
+        self.assertLess(float(next_observation["indoor_temperature_f"][0]), 72.0)
 
     def test_occupancy_aware_comfort_penalty_and_reward(self) -> None:
         config = self.make_config(
             steps_per_episode=1,
-            comfort_low_f=68.0,
+            comfort_low_f=71.0,
             comfort_weight=5.0,
             cost_weight=0.0,
             switch_weight=0.0,
@@ -157,9 +200,10 @@ class ThermostatEnvTests(unittest.TestCase):
 
         self.assertEqual(info["price_tier"], 1)
         self.assertEqual(info["price_usd_per_kwh"], config.peak_price_usd_per_kwh)
-        self.assertEqual(info["energy_kwh"], 3.0)
+        self.assertEqual(info["energy_kwh"], config.heating_low_kw)
         self.assertAlmostEqual(
-            info["energy_cost_usd"], 3.0 * config.peak_price_usd_per_kwh
+            info["energy_cost_usd"],
+            config.heating_low_kw * config.peak_price_usd_per_kwh,
         )
         self.assertAlmostEqual(reward, -2.0 * info["energy_cost_usd"])
 
@@ -210,7 +254,7 @@ class ThermostatEnvTests(unittest.TestCase):
         for _ in range(config.outdoor_temperature_peak_hour):
             observation, _, _, _, _ = env.step(HVACAction.OFF)
         self.assertAlmostEqual(
-            float(observation["outdoor_temperature_f"]),
+            float(observation["outdoor_temperature_f"][0]),
             config.outdoor_temperature_mean_f + config.outdoor_temperature_amplitude_f,
             places=5,
         )
@@ -218,7 +262,7 @@ class ThermostatEnvTests(unittest.TestCase):
         for _ in range(12):
             observation, _, _, _, _ = env.step(HVACAction.OFF)
         self.assertAlmostEqual(
-            float(observation["outdoor_temperature_f"]),
+            float(observation["outdoor_temperature_f"][0]),
             config.outdoor_temperature_mean_f - config.outdoor_temperature_amplitude_f,
             places=5,
         )

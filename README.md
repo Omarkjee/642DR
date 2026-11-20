@@ -10,11 +10,11 @@ tabular Q-learning agent, and controller baselines.
 
 ## Project status
 
-The repository includes the project proposal and an editable literature survey,
-the documented simulation assumptions, a seeded Gymnasium single-zone
-thermostat environment, and validated experiment settings. Baseline controllers,
-Q-learning, and the experiment runner remain later milestones; `python -m
-thermostat_rl` currently prints settings and does not start training.
+The repository includes the project proposal and literature survey, a seeded
+Gymnasium single-zone environment, three reference controllers, tabular
+Q-learning, fair controller evaluation, and reproducible experiment scripts.
+`python -m thermostat_rl` prints configuration; use the scripts below to run
+baselines and training.
 
 ## Quick start
 
@@ -46,32 +46,43 @@ in `.env`, reload it in your shell before running Python.
 ├── docs/
 │   ├── ITINERARY.md          # Week-by-week task list through Nov 29, 2026
 │   ├── LITERATURE_SURVEY.md  # Editable, cited literature-survey source
-│   └── PROJECT_GUIDE.md      # Finalized model, state, test, and result conventions
+│   ├── PROJECT_GUIDE.md      # Finalized model, state, test, and result conventions
+│   └── FINAL_REPORT.md       # Report-ready methods, results, and limitations draft
 ├── scripts/
+│   ├── run_baselines.py
+│   ├── run_experiments.py
 │   └── render_literature_survey.py
-├── results/                  # Generated artifacts (kept out of Git)
+├── results/                  # Reproducible baseline and experiment artifacts
 ├── src/thermostat_rl/
 │   ├── config.py             # Validated model and experiment settings
+│   ├── controllers.py        # Random, deadband, and scheduled-setback policies
 │   ├── env.py                # Gymnasium single-zone thermal simulator
+│   ├── evaluation.py         # Seed-controlled metrics and summaries
+│   ├── q_learning.py         # Sparse tabular Q-learning
 │   ├── state.py              # Tabular state discretization and size estimate
 │   └── __main__.py           # Configuration check; not a training runner
 ├── tests/
 │   ├── test_config.py
-│   └── test_env.py
+│   ├── test_controllers.py
+│   ├── test_env.py
+│   ├── test_evaluation.py
+│   └── test_q_learning.py
 ├── .env.example
 ├── Course Project details.txt
 ├── CSCE 642_ Course Project.pdf
-└── litsurvey.pdf
+└── CSCE642_LitSurvey.pdf
 ```
 
 The source documents are retained in the repository: [Course Project
 details.txt](Course%20Project%20details.txt) is the course handout,
 [CSCE 642_ Course Project.pdf](CSCE%20642_%20Course%20Project.pdf) is the team
 proposal, [docs/LITERATURE_SURVEY.md](docs/LITERATURE_SURVEY.md) is the
-editable survey source, and [litsurvey.pdf](litsurvey.pdf) is its rendered PDF.
-See the [project guide](docs/PROJECT_GUIDE.md) for the implemented model,
-state key, test conventions, and report expectations. See the
+editable survey source, and [CSCE642_LitSurvey.pdf](CSCE642_LitSurvey.pdf) is
+the current survey PDF. See the [project guide](docs/PROJECT_GUIDE.md) for the
+implemented model, state key, test conventions, and report expectations. See the
 [itinerary](docs/ITINERARY.md) for dated work items and completion status.
+The [final report draft](docs/FINAL_REPORT.md) summarizes the measured
+experiment and lists team-only submission steps still outstanding.
 
 ## Simulator
 
@@ -89,10 +100,20 @@ observation, info = env.reset(seed=42)
 observation, reward, terminated, truncated, info = env.step(env.action_space.sample())
 ```
 
-Run `python -m pytest` to validate configuration, dynamics, schedules, rewards,
-determinism, state discretization, and the Gymnasium interface. Regenerate the
-survey PDF from its Markdown source with
-`python scripts/render_literature_survey.py`.
+`python scripts/run_baselines.py` evaluates all three rule-based controllers
+over 30 common seeded episodes by default and writes raw runs, summaries, and a
+sanity plot. `python scripts/run_experiments.py` trains Q-learning for 1,000
+episodes at three comfort-reward weights with five independent training seeds
+and 20 held-out evaluation seeds per policy. It saves seed-level metrics,
+coverage, configuration, learning curves, and the cost–comfort plot under
+`results/`.
+To preview a faster run, use
+`python scripts/run_experiments.py --episodes 25 --training-seeds 2 --evaluation-seeds 3`;
+use the defaults for reportable results. The experiment also reruns baselines
+on the same held-out seeds.
+
+Run `python -m pytest` for unit and Gymnasium API tests. Regenerate the survey
+PDF from its Markdown source with `python scripts/render_literature_survey.py`.
 Format Python with `python -m black src tests scripts`.
 
 ## Experiment settings

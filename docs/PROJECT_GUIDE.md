@@ -28,9 +28,9 @@ The version-controlled starting values are in `.env.example` and validated by
 `ExperimentConfig`:
 
 - `dt = 1 hour`; indoor and outdoor temperatures are in degrees Fahrenheit.
-- `R = 2 deg F/kW`; `C = 5 kWh/deg F`. Thus `dt/C` converts a kW heat flow to
-  degrees Fahrenheit and the passive time constant is `R*C = 10 hours`.
-- The signed HVAC thermal powers are `0`, `+3`, `+6`, `-3`, and `-6 kW` for
+- `R = 6 deg F/kW`; `C = 5 kWh/deg F`. Thus `dt/C` converts a kW heat flow to
+  degrees Fahrenheit and the passive time constant is `R*C = 30 hours`.
+- The signed HVAC thermal powers are `0`, `+4`, `+8`, `-4`, and `-8 kW` for
   off, low heat, high heat, low cool, and high cool. Positive heats the zone.
 - Outdoor temperature repeats daily as `50 + 12*cos(2*pi*(hour-15)/24) deg F`.
   This is a controlled synthetic weather profile, not measured weather.
@@ -93,6 +93,10 @@ than treating this bound as the number of learned states.
   selected results.
 - Keep generated outputs under `results/`. Save machine-readable metrics and
   the exact seed/scenario/configuration alongside any plots used in the report.
+- Run `python scripts/run_baselines.py` for the shared-seed rule-controller
+  comparison and `python scripts/run_experiments.py` for the Q-learning
+  reward-weight experiment. Both commands replace their named results in
+  `results/`; preserve the checked-in defaults or record any `.env` overrides.
 
 ## Implementation sequence
 

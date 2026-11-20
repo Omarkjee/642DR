@@ -15,7 +15,7 @@ import reportlab
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "docs" / "LITERATURE_SURVEY.md"
-OUTPUT = ROOT / "litsurvey.pdf"
+OUTPUT = ROOT / "CSCE642_LitSurvey.pdf"
 LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 CODE_PATTERN = re.compile(r"`([^`]+)`")
 BOLD_PATTERN = re.compile(r"\*\*([^*]+)\*\*")

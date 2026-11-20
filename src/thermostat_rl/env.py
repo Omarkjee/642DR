@@ -1,7 +1,7 @@
 """A reproducible single-zone thermostat simulator with a Gymnasium API."""
 
 from enum import IntEnum
-from math import cos, pi
+from math import cos, isfinite, pi
 from typing import TypedDict
 
 import gymnasium as gym
@@ -48,10 +48,16 @@ class ThermostatEnv(gym.Env[ThermostatObservation, int]):
         self.observation_space = spaces.Dict(
             {
                 "indoor_temperature_f": spaces.Box(
-                    low=0.0, high=120.0, shape=(), dtype=np.float32
+                    low=np.finfo(np.float32).min,
+                    high=np.finfo(np.float32).max,
+                    shape=(1,),
+                    dtype=np.float32,
                 ),
                 "outdoor_temperature_f": spaces.Box(
-                    low=-60.0, high=120.0, shape=(), dtype=np.float32
+                    low=np.finfo(np.float32).min,
+                    high=np.finfo(np.float32).max,
+                    shape=(1,),
+                    dtype=np.float32,
                 ),
                 "hour": spaces.Discrete(24),
                 "occupancy": spaces.Discrete(2),
@@ -88,8 +94,11 @@ class ThermostatEnv(gym.Env[ThermostatObservation, int]):
                     self.config.initial_temperature_std_f,
                 )
             )
-        if not 0.0 <= initial_temperature <= 120.0:
-            raise ValueError("initial_temperature_f must be in [0, 120]")
+        if (
+            not isfinite(initial_temperature)
+            or abs(initial_temperature) > np.finfo(np.float32).max
+        ):
+            raise ValueError("initial_temperature_f must be finite and fit in float32")
 
         self._elapsed_steps = 0
         self._indoor_temperature_f = initial_temperature
@@ -192,10 +201,10 @@ class ThermostatEnv(gym.Env[ThermostatObservation, int]):
         day_type = int(day_index >= 5)
         return {
             "indoor_temperature_f": np.asarray(
-                self._indoor_temperature_f, dtype=np.float32
+                [self._indoor_temperature_f], dtype=np.float32
             ),
             "outdoor_temperature_f": np.asarray(
-                self._outdoor_temperature(hour), dtype=np.float32
+                [self._outdoor_temperature(hour)], dtype=np.float32
             ),
             "hour": hour,
             "occupancy": int(self._is_occupied(hour, day_type)),

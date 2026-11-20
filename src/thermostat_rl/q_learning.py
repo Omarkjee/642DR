@@ -1,118 +1,144 @@
-from thermostat_rl.env import HVACAction
-from thermostat_rl.config import ExperimentConfig
-from thermostat_rl.state import StateKey
+"""Sparse tabular Q-learning for the discrete thermostat action space."""
+
+from collections import defaultdict
+from math import isfinite
+from typing import TypeAlias
+
 import numpy as np
-from thermostat_rl.env import ThermostatEnv
-from thermostat_rl.state import discretize_observation
 
-# for tabular Q-learning, we need a new class
-class TabularQLearning:
-    """Tabular Q-Learning agent, used for controlling the thermostat"""
-    def __init__(self, config: ExperimentConfig) -> None:
-        # save the config and repeatable random number
-        self.config = config
-        self.random_num = np.random.default_rng(config.seed)
+from thermostat_rl.config import ExperimentConfig
+from thermostat_rl.env import HVACAction, ThermostatEnv, ThermostatObservation
+from thermostat_rl.state import (
+    StateKey,
+    discretize_observation,
+    reachable_state_upper_bound,
+)
 
-        # save important variables and initialize table
-        self.epsilon = config.epsilon_start
-        self.q_table = {}
+TrainingRecord: TypeAlias = dict[str, int | float]
 
-    def state_qValues(self, state: StateKey) -> np.ndarray:
-        """Get Q-Values for given state"""
-        # if state not in Q table yet, all actions will be zero
-        if state not in self.q_table:
-            self.q_table[state] = np.zeros(len(HVACAction))
-        return self.q_table[state]
 
-    def select_action(self, state:StateKey) -> HVACAction:
-        """Based on epsilon-greedy selection, choose HVAC action"""
-        # get the current q_values
-        q_values = self.state_qValues(state)
+class QLearningAgent:
+    """Tabular off-policy Q-learning with seeded epsilon-greedy actions."""
 
-        # if random num is less than epsilon, choose a random HVAC action
-        if self.random_num.random() < self.epsilon:
-            random_action = self.random_num.integers(0, len(HVACAction))
-            return HVACAction(random_action)
+    def __init__(
+        self, config: ExperimentConfig | None = None, seed: int | None = None
+    ) -> None:
+        self.config = config or ExperimentConfig()
+        self.config.validate()
+        agent_seed = self.config.seed if seed is None else seed
+        if agent_seed < 0:
+            raise ValueError("seed must be non-negative")
+        self._rng = np.random.default_rng(agent_seed)
+        self.q_values: dict[StateKey, np.ndarray] = {}
+        self.action_visits: defaultdict[tuple[StateKey, int], int] = defaultdict(int)
 
-        # otherwise, choose best greedy action
-        best_greedy_action = np.argmax(q_values)
-        return HVACAction(best_greedy_action)
+    @property
+    def visited_state_action_pairs(self) -> int:
+        return len(self.action_visits)
 
-    def update_qValue(self, state:StateKey, action: HVACAction, reward: float, next_state: StateKey, terminal_state: bool = False) -> None:
-        """Update Q-value using the Q-learning equation"""
-        # get Q-values for current & next state
-        curr_q_values = self.state_qValues(state)
-        next_q_values = self.state_qValues(next_state)
+    @property
+    def visited_states(self) -> int:
+        return len(self.q_values)
 
-        # use given action to select Q-value, and best Q-value for next state
-        current_qValue = curr_q_values[action.value]
-        if terminal_state == True:
-            best_next_qValue = 0.0
-        else:
-            best_next_qValue = np.max(next_q_values)
-
-        # calc updated Q-value
-        # Q(s, a) ← Q(s, a) + η [r + γ*max_a′ Q(s′, a′) − Q(s, a)]
-        update_Q = current_qValue + self.config.learning_rate * (reward + self.config.discount_factor * best_next_qValue - current_qValue)
-        curr_q_values[action.value] = update_Q
-
-    def update_epsilon_decay(self) -> None:
-        """When finding optimal action, epsilon decays after each episode"""
-        # just need to update the epsilon value
-        # make it slightly smaller
-        update_epsilon = self.epsilon * self.config.epsilon_decay
-
-        # need to make sure it's not smaller than epsilon_min
-        self.epsilon = max(self.config.epsilon_min, update_epsilon)
-    
-    def train_QLearning_episode(self, environment: ThermostatEnv, seed = None) -> float:
-        """Train an episode of Tabular Q-Learning"""
-        # reset environment, to make sure testing is accurate
-        observation, _ = environment.reset(seed = seed)
+    def select_action(
+        self, observation: ThermostatObservation, epsilon: float = 0.0
+    ) -> HVACAction:
+        if not isfinite(epsilon) or not 0.0 <= epsilon <= 1.0:
+            raise ValueError("epsilon must be finite and in [0, 1]")
         state = discretize_observation(observation, self.config)
-        final_reward = 0.0
-            
-        # episode will continue until the environment is either terminated or truncated
-        bool_terminated = False
-        bool_truncated = False
-        while (bool_terminated == False and bool_truncated == False):
-            # select an action
-            action_selected = self.select_action(state)
-    
-            # use the selected action
-            observation, reward, bool_terminated, bool_truncated, info = environment.step(action_selected)
-            
-            # discretize observation
-            next_state = discretize_observation(observation, self.config)
+        if self._rng.random() < epsilon:
+            return HVACAction(int(self._rng.integers(len(HVACAction))))
+        values = self.q_values.get(state)
+        if values is None:
+            return HVACAction.OFF
+        return HVACAction(int(np.argmax(values)))
 
-            # update Q-table value
-            if bool_terminated == True or bool_truncated == True:
-                self.update_qValue(state, action_selected, reward, next_state, terminal_state=True)
-            else: 
-                self.update_qValue(state, action_selected, reward, next_state)
+    def update(
+        self,
+        state: StateKey,
+        action: HVACAction | int,
+        reward: float,
+        next_state: StateKey,
+        terminated: bool,
+    ) -> None:
+        action_index = int(action)
+        if action_index not in range(len(HVACAction)):
+            raise ValueError(f"action must be in [0, {len(HVACAction)})")
+        if not isfinite(reward):
+            raise ValueError("reward must be finite")
 
-            # update reward
-            final_reward += reward
+        values = self.q_values.setdefault(state, np.zeros(len(HVACAction)))
+        next_values = self.q_values.setdefault(next_state, np.zeros(len(HVACAction)))
+        bootstrap = (
+            0.0
+            if terminated
+            else self.config.discount_factor * float(np.max(next_values))
+        )
+        target = reward + bootstrap
+        values[action_index] += self.config.learning_rate * (
+            target - values[action_index]
+        )
+        self.action_visits[(state, action_index)] += 1
 
-            # update to next state
-            state = next_state
 
-        # update epsilon decay after each episode
-        self.update_epsilon_decay()
+def train_q_learning(
+    environment: ThermostatEnv,
+    config: ExperimentConfig,
+    seed: int | None = None,
+) -> tuple[QLearningAgent, list[TrainingRecord]]:
+    """Train over configured episodes; return agent and reproducible learning log."""
+    training_seed = config.seed if seed is None else seed
+    if training_seed < 0:
+        raise ValueError("seed must be non-negative")
 
-        return final_reward
+    agent = QLearningAgent(config, seed=training_seed)
+    history: list[TrainingRecord] = []
+    epsilon = config.epsilon_start
+    state_upper_bound = reachable_state_upper_bound(config)
+    pair_upper_bound = state_upper_bound * len(HVACAction)
 
-    # multiple episodes
-    def train_QLearning(self, environment: ThermostatEnv) -> list[float]:
-        """Train Tabular Q-Learning using multiple episodes"""
-        # save results from each episode into a list
-        multiple_episode_rewards = []
+    for episode in range(config.episodes):
+        episode_seed = training_seed * config.episodes + episode
+        observation, _ = environment.reset(seed=episode_seed)
+        episode_return = 0.0
+        for _ in range(config.steps_per_episode):
+            state = discretize_observation(observation, config)
+            action = agent.select_action(observation, epsilon=epsilon)
+            next_observation, reward, terminated, truncated, _ = environment.step(
+                action
+            )
+            next_state = discretize_observation(next_observation, config)
+            agent.update(
+                state,
+                action,
+                reward,
+                next_state,
+                terminated=terminated or truncated,
+            )
+            episode_return += reward
+            observation = next_observation
+            if terminated or truncated:
+                break
+        else:
+            raise RuntimeError(
+                "training episode did not terminate within its step limit"
+            )
 
-        # loop through multiple episodes
-        for curr_episode in range(self.config.episodes):
-            # slightly change seed, so each episode doesn't give the exact same reward
-            curr_episode_seed = self.config.seed + curr_episode
-            curr_reward = self.train_QLearning_episode(environment, seed = curr_episode_seed)
-            multiple_episode_rewards.append(curr_reward)
+        history.append(
+            {
+                "episode": episode + 1,
+                "episode_return": episode_return,
+                "epsilon": epsilon,
+                "visited_states": agent.visited_states,
+                "visited_state_action_pairs": agent.visited_state_action_pairs,
+                "state_coverage_percentage": (
+                    100.0 * agent.visited_states / state_upper_bound
+                ),
+                "state_action_coverage_percentage": (
+                    100.0 * agent.visited_state_action_pairs / pair_upper_bound
+                ),
+            }
+        )
+        epsilon = max(config.epsilon_min, epsilon * config.epsilon_decay)
 
-        return multiple_episode_rewards
+    return agent, history

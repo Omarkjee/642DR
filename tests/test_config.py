@@ -11,7 +11,7 @@ class ExperimentConfigTests(unittest.TestCase):
             config = ExperimentConfig.from_env()
 
         self.assertEqual(config.seed, 42)
-        self.assertEqual(config.episodes, 500)
+        self.assertEqual(config.episodes, 1000)
         self.assertEqual(config.discount_factor, 0.99)
 
     def test_reads_environment_overrides(self) -> None:

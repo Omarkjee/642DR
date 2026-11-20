@@ -21,23 +21,25 @@ The five actions are off, low heat, high heat, low cool, and high cool. Heating
 and cooling are represented by signed thermal powers. The reward is the
 negative weighted sum of interval electricity cost, occupied comfort
 violation in degree-hours, and a mode-change indicator. The current
-configuration uses a one-hour time step, `R = 2 deg F/kW`, `C = 5 kWh/deg F`,
+configuration uses a one-hour time step, `R = 6 deg F/kW`, `C = 5 kWh/deg F`,
 an occupied comfort band of 68–76 deg F, a deterministic daily outdoor
 temperature profile, weekday work-hour absence, and an afternoon/evening peak
-price. These are stated assumptions for reproducibility, not measurements or
-tuned results; the [project guide](PROJECT_GUIDE.md) records their definitions
-and units. For this initial model, electrical input equals absolute HVAC
-thermal power (coefficient of performance 1), a simplifying assumption rather
-than a realistic HVAC efficiency model.
+price. Heating/cooling actions apply signed thermal powers of 4 and 8 kW;
+electrical input equals absolute HVAC thermal power (coefficient of
+performance 1). These are stated assumptions for reproducibility, not
+measurements or tuned results; the [project guide](PROJECT_GUIDE.md) records
+their definitions and units.
 
 The research question is whether a small tabular policy learns useful
 pre-conditioning behavior from these signals, and how that behavior trades
-comfort against cost. We will measure total energy cost, occupied comfort
+comfort against cost. We measure total energy cost, occupied comfort
 degree-hours, percentage of occupied time in band, HVAC mode changes, and
 the lower comfort-bound deficit at the first occupied step after an away
 period. The held-out controller comparison must use the same weather,
-schedules, episode lengths, and seeds. No performance result is claimed before
-those experiments are run.
+schedules, episode lengths, and held-out seeds. Measured controller results
+and limitations are reported separately in the [final report
+draft](FINAL_REPORT.md); this survey itself makes no empirical performance
+claim.
 
 ## Decisions since the proposal
 

@@ -19,3 +19,14 @@ venv/
 results/*
 !results/.gitkeep
 !results/README.md
+!results/baseline_table.csv
+!results/baseline_summary.csv
+!results/baseline_plot.png
+!results/experiment_runs.csv
+!results/experiment_summary.csv
+!results/policy_seed_summary.csv
+!results/learning_curves.csv
+!results/training_coverage.csv
+!results/experiment_metadata.json
+!results/learning_curve.png
+!results/reward_tradeoff.png

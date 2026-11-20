@@ -1,183 +1,96 @@
-from thermostat_rl.env import HVACAction
-from thermostat_rl.config import ExperimentConfig
-from thermostat_rl.state import StateKey
-from thermostat_rl.q_learning import TabularQLearning
+from dataclasses import replace
+
 import numpy as np
-from thermostat_rl.env import ThermostatEnv
+import pytest
 
-def test_state_qValues_newState():
-    """Testing state_qValues() when state is not in the Q table yet"""
-    # initialize values
-    config = ExperimentConfig()
-    state = (0, 0, 0, 0, 0, 0, 0)
-    q_learning = TabularQLearning(config)
-    q_values = q_learning.state_qValues(state)
+from thermostat_rl.config import ExperimentConfig
+from thermostat_rl.env import HVACAction, ThermostatEnv
+from thermostat_rl.q_learning import QLearningAgent, train_q_learning
+from thermostat_rl.state import discretize_observation
 
-    # if state not in Q table yet, all actions will be zero
-    assert state in q_learning.q_table
-    assert np.all(q_values == 0)
 
-def test_state_qValues_existingState():
-    """Testing state_qValues() when state is already in the Q table"""
-    # initialize values
-    config = ExperimentConfig()
-    state = (0, 0, 0, 0, 0, 0, 0)
-    q_learning = TabularQLearning(config)
+def small_config() -> ExperimentConfig:
+    return replace(
+        ExperimentConfig(),
+        episodes=6,
+        steps_per_episode=24,
+        initial_temperature_std_f=0.0,
+        temperature_noise_std_f=0.0,
+    )
 
-    # add state to Q table before calling state_qValues()
-    q_learning.q_table[state] = np.array([6.0, 4.0, 2.0, 642.0, 64.2])
-    assert state in q_learning.q_table
 
-    q_values = q_learning.state_qValues(state)
-    assert np.array_equal(q_values, np.array([6.0, 4.0, 2.0, 642.0, 64.2]))
+def test_q_learning_update_bootstraps_nonterminal_but_not_terminal() -> None:
+    config = replace(ExperimentConfig(), learning_rate=0.5, discount_factor=0.9)
+    agent = QLearningAgent(config, seed=3)
+    state = (1, 2, 3, 1, 0, 0, 0)
+    next_state = (1, 2, 4, 1, 0, 0, 0)
+    agent.q_values[state] = np.asarray([4.0, 0, 0, 0, 0])
+    agent.q_values[next_state] = np.asarray([1.0, 2.0, 10.0, 0, 0])
 
-def test_TabularQLearning_greedyEpsilon_zero():
-    """Testing epsilon-greedy selection when epsilon is zero"""
-    # initialize values
-    config = ExperimentConfig()
-    state = (0, 0, 0, 0, 0, 0, 0)
-    q_learning = TabularQLearning(config)
+    agent.update(
+        state, HVACAction.OFF, reward=2.0, next_state=next_state, terminated=False
+    )
+    assert agent.q_values[state][HVACAction.OFF] == pytest.approx(7.5)
 
-    # using epsilon = 0, will make selection based on best Q-value
-    q_learning.epsilon = 0.0
+    agent.q_values[state][HVACAction.OFF] = 4.0
+    agent.update(
+        state, HVACAction.OFF, reward=2.0, next_state=next_state, terminated=True
+    )
+    assert agent.q_values[state][HVACAction.OFF] == pytest.approx(3.0)
+    assert agent.action_visits[(state, HVACAction.OFF)] == 2
 
-    # add state to Q table before calling state_qValues()
-    # since fourth HVACAction has highest value, HVAC should select COOL_LOW
-    q_learning.q_table[state] = np.array([6.0, 4.0, 2.0, 642.0, 64.2])
-    assert state in q_learning.q_table
-    best_greedy_action = q_learning.select_action(state)
-    assert best_greedy_action == HVACAction.COOL_LOW
 
-def test_TabularQLearning_greedyEpsilon_one():
-    """Testing epsilon-greedy selection when epsilon is one"""
-    # initialize values
-    config = ExperimentConfig()
-    state = (0, 0, 0, 0, 0, 0, 0)
-    q_learning = TabularQLearning(config)
-
-    # using epsilon = 1, will make selection based on random action
-    q_learning.epsilon = 1.0
-
-    # add state to Q table before calling state_qValues()
-    q_learning.q_table[state] = np.array([6.0, 4.0, 2.0, 642.0, 64.2])
-    assert state in q_learning.q_table
-
-    # check potential random actions are valid
-    random_actions = []
-    for i in range(20):
-        random_action_selected = q_learning.select_action(state)
-        random_actions.append(random_action_selected)
-        # make sure the action is valid
-        assert isinstance(random_action_selected, HVACAction)
-    
-    # since we were selecting random actions, there should be more than one distinct HVACAction in the list
-    # make sure it's not always just selecting the same action
-    assert len(set(random_actions)) > 1
-
-def test_update_qValue():
-    """Test update_qValue() function"""
-    # initialize values
-    config = ExperimentConfig()
-    state = (0, 0, 0, 0, 0, 0, 0)
-    next_state = (1, 0, 0, 0, 0, 0, 0)
-    q_learning = TabularQLearning(config)
-
-    # add state to Q table before calling state_qValues()
-    q_learning.q_table[state] = np.array([6.0, 4.0, 2.0, 642.0, 64.2])
-    assert state in q_learning.q_table
-    q_learning.q_table[next_state] = np.array([6.0, 0.0, 4.0, 0.0, 2.0])
-    assert next_state in q_learning.q_table
-
-    # need to check if function is actually updating the Q-value
-    selected_action = HVACAction.HEAT_LOW
-    reward = 10.0   
-    current_qValue = q_learning.q_table[state][selected_action.value]
-    best_next_qValue = np.max(q_learning.q_table[next_state])
-    # Q(s, a) ← Q(s, a) + η [r + γ*max_a′ Q(s′, a′) − Q(s, a)]
-    expected_qValue = current_qValue + config.learning_rate * (reward + config.discount_factor * best_next_qValue - current_qValue)
-    q_learning.update_qValue(state, selected_action, reward, next_state)
-    assert np.isclose(q_learning.q_table[state][selected_action.value], expected_qValue)
-
-def test_epsilon_decay():
-    """Testing function for updating epsilon decay"""
-    # initialize values
-    config = ExperimentConfig()
-    q_learning = TabularQLearning(config)
-
-    # compare initial and decayed epsilon values
-    initial_epsilon = q_learning.epsilon
-    q_learning.update_epsilon_decay()
-    assert q_learning.epsilon < initial_epsilon
-    assert q_learning.epsilon > config.epsilon_min
-
-def test_repeated_epsilon_decay():
-    """Testing function for updating epsilon decay over multiple iterations"""
-    # initialize values
-    config = ExperimentConfig()
-    q_learning = TabularQLearning(config)
-
-    # compare initial and decayed epsilon values
-    initial_epsilon = q_learning.epsilon
-    for i in range(10000):
-        q_learning.update_epsilon_decay()
-
-    assert q_learning.epsilon < initial_epsilon
-    assert q_learning.epsilon == config.epsilon_min
-
-def test_update_qValue_terminalState():
-    # initialize values
-    config = ExperimentConfig()
-    state = (0, 0, 0, 0, 0, 0, 0)
-    next_state = (1, 0, 0, 0, 0, 0, 0)
-    q_learning = TabularQLearning(config)
-
-    # add state to Q table before calling state_qValues()
-    q_learning.q_table[state] = np.array([6.0, 4.0, 2.0, 642.0, 64.2])
-    assert state in q_learning.q_table
-    q_learning.q_table[next_state] = np.array([600.0, 0.0, 400.0, 0.0, 200.0])
-    assert next_state in q_learning.q_table
-
-    # need to check if function is actually updating the Q-value
-    selected_action = HVACAction.HEAT_LOW
-    reward = 10.0   
-    current_qValue = q_learning.q_table[state][selected_action.value]
-    
-    # Q(s, a) ← Q(s, a) + η [r + γ*max_a′ Q(s′, a′) − Q(s, a)]
-    # (config.discount_factor * best_next_qValue) = 0 when at terminal state, so removed it from equation
-    expected_qValue = current_qValue + config.learning_rate * (reward - current_qValue)
-    q_learning.update_qValue(state, selected_action, reward, next_state, terminal_state=True)
-    assert np.isclose(q_learning.q_table[state][selected_action.value], expected_qValue)
-
-def test_train_QLearning_episode():
-    """Testing function for running one training episode for Q-Learning"""
-    # initialize values
-    config = ExperimentConfig()
+def test_greedy_selection_uses_learned_values_and_unseen_state_defaults_to_off() -> (
+    None
+):
+    config = small_config()
     environment = ThermostatEnv(config)
-    q_learning = TabularQLearning(config)
+    observation, _ = environment.reset(seed=1)
+    agent = QLearningAgent(config, seed=1)
 
-    # compare initial and decayed epsilon values
-    initial_epsilon = q_learning.epsilon
+    assert agent.select_action(observation) == HVACAction.OFF
+    state = discretize_observation(observation, config)
+    agent.q_values[state] = np.asarray([-1.0, 0.0, 0.0, -2.0, -3.0])
+    assert agent.select_action(observation) == HVACAction.HEAT_LOW
+    assert agent.select_action(observation, epsilon=1.0) in set(HVACAction)
 
-    # train for one episode and make sure the values are valid afterwards
-    final_reward = q_learning.train_QLearning_episode(environment, seed=642)
-    assert isinstance(final_reward, float)
-    assert len(q_learning.q_table) > 0
-    assert q_learning.epsilon < initial_epsilon
 
-def test_train_QLearning_multiple_episode():
-    """Testing function for full Q-Learning that trains with multiple episodes"""
-    # initialize values
-    config = ExperimentConfig(episodes=6)
-    environment = ThermostatEnv(config)
-    q_learning = TabularQLearning(config)
+def test_epsilon_and_update_reject_invalid_values() -> None:
+    agent = QLearningAgent(seed=1)
+    observation, _ = ThermostatEnv().reset(seed=1)
+    with pytest.raises(ValueError, match="epsilon"):
+        agent.select_action(observation, epsilon=1.1)
+    with pytest.raises(ValueError, match="reward"):
+        agent.update(
+            (0, 0, 0, 0, 0, 0, 0), 0, float("nan"), (0, 0, 0, 0, 0, 0, 0), False
+        )
 
-    # compare initial and decayed epsilon values
-    initial_epsilon = q_learning.epsilon
 
-    # run full training
-    multiple_episode_reward = q_learning.train_QLearning(environment)
+def test_short_training_is_seeded_and_records_coverage() -> None:
+    config = small_config()
+    first_agent, first_history = train_q_learning(
+        ThermostatEnv(config), config, seed=42
+    )
+    second_agent, second_history = train_q_learning(
+        ThermostatEnv(config), config, seed=42
+    )
 
-    assert len(multiple_episode_reward) == 6
-    assert all(isinstance(curr_reward, float) for curr_reward in multiple_episode_reward)
-    assert len(q_learning.q_table) > 0
-    assert q_learning.epsilon < initial_epsilon
+    assert first_history == second_history
+    assert first_agent.visited_states == second_agent.visited_states
+    assert (
+        first_agent.visited_state_action_pairs
+        == second_agent.visited_state_action_pairs
+    )
+    assert len(first_history) == config.episodes
+    assert first_history[0]["epsilon"] == config.epsilon_start
+    assert first_history[-1]["epsilon"] < config.epsilon_start
+    assert first_history[-1]["visited_states"] == first_agent.visited_states
+    assert first_history[-1]["visited_state_action_pairs"] > 0
+    for state, values in first_agent.q_values.items():
+        np.testing.assert_array_equal(values, second_agent.q_values[state])
+
+
+def test_training_rejects_negative_seed() -> None:
+    config = small_config()
+    with pytest.raises(ValueError, match="seed"):
+        train_q_learning(ThermostatEnv(config), config, seed=-1)
