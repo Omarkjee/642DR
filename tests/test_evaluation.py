@@ -11,6 +11,7 @@ from thermostat_rl.evaluation import (
     evaluate_controller,
     summarize_results,
 )
+from thermostat_rl.q_learning import train_q_learning
 
 
 class ConstantController:
@@ -48,6 +49,39 @@ def test_evaluation_metrics_and_schedule_transitions_are_well_defined() -> None:
     assert result["pre_transition_count"] == 8
     assert result["pre_transition_energy_kwh"] == 8 * config.heating_low_kw
     assert result["pre_transition_energy_percentage"] == pytest.approx(100 / 3)
+
+
+def test_trained_q_learning_agent_is_evaluated_without_exploration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = replace(
+        ExperimentConfig(),
+        episodes=4,
+        steps_per_episode=24,
+        initial_temperature_std_f=0.0,
+        temperature_noise_std_f=0.0,
+    )
+    agent, history = train_q_learning(ThermostatEnv(config), config, seed=42)
+    assert history
+    assert agent.q_values
+
+    selected_epsilons: list[float] = []
+    select_action = agent.select_action
+
+    def record_selection(
+        observation: dict[str, object], epsilon: float = 0.0
+    ) -> HVACAction:
+        selected_epsilons.append(epsilon)
+        return select_action(observation, epsilon=epsilon)
+
+    monkeypatch.setattr(agent, "select_action", record_selection)
+    result = evaluate_controller(ThermostatEnv(config), agent, seed=123)
+
+    assert result["controller_type"] == "QLearningAgent"
+    assert result["seed"] == 123
+    assert result["energy_cost_usd"] >= 0
+    assert selected_epsilons
+    assert set(selected_epsilons) == {0.0}
 
 
 def test_evaluation_rejects_invalid_seed_and_transition_window() -> None:
