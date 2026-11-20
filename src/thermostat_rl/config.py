@@ -30,15 +30,15 @@ class ExperimentConfig:
     """Reproducible settings for the thermal model, reward, and experiments."""
 
     seed: int = 42
-    episodes: int = 500
+    episodes: int = 1000
     steps_per_episode: int = 168
     time_step_hours: float = 1.0
-    thermal_resistance_f_per_kw: float = 2.0
+    thermal_resistance_f_per_kw: float = 6.0
     thermal_capacitance_kwh_per_f: float = 5.0
-    heating_low_kw: float = 3.0
-    heating_high_kw: float = 6.0
-    cooling_low_kw: float = 3.0
-    cooling_high_kw: float = 6.0
+    heating_low_kw: float = 4.0
+    heating_high_kw: float = 8.0
+    cooling_low_kw: float = 4.0
+    cooling_high_kw: float = 8.0
     initial_temperature_mean_f: float = 72.0
     initial_temperature_std_f: float = 1.0
     outdoor_temperature_mean_f: float = 50.0

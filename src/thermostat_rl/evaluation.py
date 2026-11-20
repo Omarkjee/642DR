@@ -1,142 +1,188 @@
-from thermostat_rl.controllers import DeadbandController, RandomController
-from thermostat_rl.env import ThermostatEnv
-from thermostat_rl.config import ExperimentConfig
-from thermostat_rl.controllers import ScheduledSetbackController
-from collections import deque
+"""Fair, seed-controlled episode evaluation and baseline comparisons."""
 
-# need to calculate energy cost, comfort degree-hours, occupied comfort percentage, and HVAC mode changes
-# updating code to implement pre-transition energy
-def evaluate_controller(environment: ThermostatEnv, controller: DeadbandController | RandomController | ScheduledSetbackController, seed: int = 642) -> dict:
-    """Calculate metrics to evaluate controller after one episode"""
-    # reset environment, to make sure testing is accurate
-    observation, _ = environment.reset(seed = seed)
-    occupancy = observation["occupancy"]
-    # add/save price tier
-    price_tier = observation["price_tier"]
-    
-    # need to calculate energy cost, comfort degree-hours, occupied comfort percentage, and HVAC mode changes
-    # save each metric into its own variable
-    energy_cost = 0.0
+from collections import defaultdict
+from math import sqrt
+from typing import TypeAlias
+
+from thermostat_rl.config import ExperimentConfig
+from thermostat_rl.controllers import (
+    Controller,
+    DeadbandController,
+    RandomController,
+    ScheduledSetbackController,
+)
+from thermostat_rl.env import ThermostatEnv
+
+MetricValue: TypeAlias = str | int | float
+EpisodeResult: TypeAlias = dict[str, MetricValue]
+
+CONTROLLER_NAMES = (
+    "RandomController",
+    "DeadbandController",
+    "ScheduledSetbackController",
+)
+CONTROLLER_DISPLAY_NAMES = {
+    "RandomController": "Random",
+    "DeadbandController": "Deadband",
+    "ScheduledSetbackController": "Scheduled setback",
+}
+EVALUATION_METRICS = (
+    "energy_cost_usd",
+    "energy_kwh",
+    "comfort_degree_hours",
+    "occupied_comfort_percentage",
+    "mode_changes",
+    "mean_arrival_temperature_deficit_f",
+    "pre_transition_energy_kwh",
+    "pre_transition_energy_percentage",
+)
+
+
+def evaluate_controller(
+    environment: ThermostatEnv,
+    controller: Controller,
+    seed: int = 642,
+    pre_transition_window_hours: int = 2,
+) -> EpisodeResult:
+    """Evaluate one episode; transitions use the next observation boundary."""
+    if seed < 0:
+        raise ValueError("seed must be non-negative")
+    if pre_transition_window_hours <= 0:
+        raise ValueError("pre_transition_window_hours must be positive")
+
+    observation, _ = environment.reset(seed=seed)
+    energy_cost_usd = 0.0
+    energy_kwh = 0.0
     comfort_degree_hours = 0.0
     occupied_steps = 0
     comfortable_occupied_steps = 0
-    occupied_comfort_percentage = 0.0
-    HVAC_mode_changes = 0
-    # add variables for arrival temperature deficit
-    arrival_temp_deficit = 0.0
-    occupancy_count = 0
-    # add variables for pre-transition energy
-    energy_kwh = 0.0
-    preTransition_energy_kwh = 0.0
-    energy_transition_k = 2 # 2 hour transition time
-    energy_kwh_history = deque(maxlen = energy_transition_k) # need to save the energy from previous timesteps
-    preTransition_energy_kwh_percentage = 0.0
+    mode_changes = 0
+    arrival_deficits_f: list[float] = []
+    energy_by_step: dict[int, float] = {}
+    pre_transition_steps: set[int] = set()
 
-    # episode will continue until the environment is either terminated or truncated
-    bool_terminated = False
-    bool_truncated = False
-    while (bool_terminated == False and bool_truncated == False):
-        # select an action
-        action_selected = controller.select_action(observation)
+    for _ in range(environment.config.steps_per_episode):
+        action = controller.select_action(observation)
+        next_observation, _, terminated, truncated, info = environment.step(action)
+        step_index = int(info["step"])
+        step_energy = float(info["energy_kwh"])
+        energy_by_step[step_index] = step_energy
+        energy_cost_usd += float(info["energy_cost_usd"])
+        energy_kwh += step_energy
+        comfort_degree_hours += float(info["comfort_violation_degree_hours"])
+        mode_changes += int(bool(info["mode_changed"]))
 
-        # use the selected action
-        observation, reward, bool_terminated, bool_truncated, info = environment.step(action_selected)
-
-        # add metrics for price tier
-        # want to know how much energy was used within the 2 hours before occupancy
-        energy_kwh += info["energy_kwh"]
-
-        # check if occupancy or price changed within those 2 hours
-        if occupancy != info["occupancy"]:
-            occupancy_change = True
-        else:
-            occupancy_change = False
-
-        if price_tier != info["price_tier"]:
-            price_change = True
-        else:
-            price_change = False
-        
-        # if occupancy or price changed, calculate by how much
-        if occupancy_change == True or price_change == True:
-            preTransition_energy_kwh += sum(energy_kwh_history)
-        energy_kwh_history.append(info["energy_kwh"])
-
-        # update metric variables
-        energy_cost += info["energy_cost_usd"]
-        comfort_degree_hours += info["comfort_violation_degree_hours"]
-        if info["mode_changed"] == True:
-            HVAC_mode_changes += 1
-
-        # check occupancy comfort
-        if info["occupancy"] == True:
+        if info["occupancy"]:
             occupied_steps += 1
+            comfortable_occupied_steps += int(bool(info["occupied_comfortable"]))
 
-            # if occupied, was temp within the comfortable range
-            if info["occupied_comfortable"] == True:
-                comfortable_occupied_steps += 1
+        occupancy_arrival = (
+            not observation["occupancy"] and next_observation["occupancy"]
+        )
+        if occupancy_arrival:
+            indoor_temperature = float(next_observation["indoor_temperature_f"][0])
+            arrival_deficits_f.append(
+                max(environment.config.comfort_low_f - indoor_temperature, 0.0)
+            )
 
-        # adding metrics for arrival-temp deficit
-        if occupancy == 0 and info["occupancy"] == 1:
-            occupancy_count += 1
+        schedule_transition = (
+            observation["occupancy"] != next_observation["occupancy"]
+            or observation["price_tier"] != next_observation["price_tier"]
+        )
+        if schedule_transition:
+            start = max(0, step_index - pre_transition_window_hours + 1)
+            pre_transition_steps.update(range(start, step_index + 1))
 
-            # check and save how much the temp is outside of comfortable range
-            if info["indoor_temperature_f"] < environment.config.comfort_low_f:
-                arrival_temp_deficit += environment.config.comfort_low_f - info["indoor_temperature_f"]
-            elif info["indoor_temperature_f"] > environment.config.comfort_high_f:
-                arrival_temp_deficit += info["indoor_temperature_f"] - environment.config.comfort_high_f
-            else: 
-                # in comfortable range
-                arrival_temp_deficit += 0 
+        observation = next_observation
+        if terminated or truncated:
+            break
+    else:
+        raise RuntimeError("evaluation episode did not terminate within its step limit")
 
-        # save occupancy and price tier
-        occupancy = info["occupancy"]
-        price_tier = info["price_tier"]
+    pre_transition_energy_kwh = sum(
+        energy_by_step[step] for step in pre_transition_steps
+    )
+    return {
+        "seed": seed,
+        "controller_type": type(controller).__name__,
+        "energy_cost_usd": energy_cost_usd,
+        "energy_kwh": energy_kwh,
+        "comfort_degree_hours": comfort_degree_hours,
+        "occupied_comfort_percentage": (
+            100.0 * comfortable_occupied_steps / occupied_steps
+            if occupied_steps
+            else 0.0
+        ),
+        "mode_changes": mode_changes,
+        "arrival_count": len(arrival_deficits_f),
+        "mean_arrival_temperature_deficit_f": (
+            sum(arrival_deficits_f) / len(arrival_deficits_f)
+            if arrival_deficits_f
+            else 0.0
+        ),
+        "pre_transition_count": len(pre_transition_steps),
+        "pre_transition_energy_kwh": pre_transition_energy_kwh,
+        "pre_transition_energy_percentage": (
+            100.0 * pre_transition_energy_kwh / energy_kwh if energy_kwh else 0.0
+        ),
+    }
 
-    # after episode ends, still need to calculate one more metric
-    # calc occupied comfort percentage
-    if occupied_steps > 0: # don't want to divide by zero
-        occupied_comfort_percentage = (comfortable_occupied_steps / occupied_steps) * 100
 
-    # also calc arrival temperature deficit
-    if occupancy_count > 0:
-        arrival_temp_deficit = arrival_temp_deficit / occupancy_count
+def controller_baselines(
+    environment: ThermostatEnv,
+    config: ExperimentConfig,
+    seed_list: list[int],
+) -> list[EpisodeResult]:
+    """Run all three baseline policies on each identical evaluation seed."""
+    results: list[EpisodeResult] = []
+    for seed in seed_list:
+        controllers: tuple[Controller, ...] = (
+            RandomController(seed=seed),
+            DeadbandController(config),
+            ScheduledSetbackController(config),
+        )
+        results.extend(
+            evaluate_controller(environment, controller, seed=seed)
+            for controller in controllers
+        )
+    return results
 
-    # need to also calculate pre-transition fraction
-    if energy_kwh > 0:
-        preTransition_energy_kwh_percentage = (preTransition_energy_kwh / energy_kwh) * 100
-    
-    # return metric results
-    evaluation_metrics_dict = {"seed": seed, "energy_cost_usd": energy_cost, "comfort_degree_hours": comfort_degree_hours,
-               "occupied_comfort_percentage": occupied_comfort_percentage, "HVAC_mode_changes": HVAC_mode_changes,
-               "arrival_temperature_deficit": arrival_temp_deficit, "preTransition_energy_kwh_percentage": preTransition_energy_kwh_percentage}
-    return evaluation_metrics_dict
 
-# need to run baseline for random action and deadband controllers
-# during testing, save a table to compare results
-# adding ScheduledSetbackController into baselines, so we can have 3 baseline controllers
-def controller_baselines(environment: ThermostatEnv, config: ExperimentConfig, seed_list: list[int]) -> list[dict]:
-    """Run the baseline for list of random action, deadband, and scheduled setback controllers"""
-    # running on list of different seeds to see reproducibility
-    baseline_results = []
-    for seed_i in seed_list:
-        # create the controllers
-        deadband_controller = DeadbandController(config)
-        random_action_controller = RandomController(seed = seed_i)
+def summarize_results(
+    results: list[EpisodeResult],
+    group_by: tuple[str, ...] = ("controller_type",),
+) -> list[dict[str, MetricValue]]:
+    """Summarize each controller with mean, sample SD, and 95% normal CI."""
+    if not group_by:
+        raise ValueError("group_by must name at least one result field")
+    grouped: dict[tuple[MetricValue, ...], list[EpisodeResult]] = defaultdict(list)
+    for result in results:
+        try:
+            group_key = tuple(result[field] for field in group_by)
+        except KeyError as exc:
+            raise ValueError(f"unknown grouping field: {exc.args[0]}") from exc
+        grouped[group_key].append(result)
 
-        # save the results for each controller
-        randomController_results = evaluate_controller(environment, random_action_controller, seed = seed_i)
-        randomController_results["controller_type"] = "RandomController"
-        baseline_results.append(randomController_results)
-
-        deadbandController_results = evaluate_controller(environment, deadband_controller, seed = seed_i)
-        deadbandController_results["controller_type"] = "DeadbandController"
-        baseline_results.append(deadbandController_results)
-
-        # add ScheduledSetbackController into baselines
-        scheduled_setback_controller = ScheduledSetbackController(config)
-        scheduledSetbackController_results = evaluate_controller(environment, scheduled_setback_controller, seed = seed_i)
-        scheduledSetbackController_results["controller_type"] = "ScheduledSetbackController"
-        baseline_results.append(scheduledSetbackController_results)
-
-    return baseline_results
+    summaries: list[dict[str, MetricValue]] = []
+    for group_key in sorted(grouped, key=lambda group: tuple(map(str, group))):
+        rows = grouped[group_key]
+        summary: dict[str, MetricValue] = dict(zip(group_by, group_key))
+        summary["episodes"] = len(rows)
+        for metric in EVALUATION_METRICS:
+            values = [float(row[metric]) for row in rows]
+            mean_value = sum(values) / len(values)
+            standard_deviation = (
+                sqrt(
+                    sum((value - mean_value) ** 2 for value in values)
+                    / (len(values) - 1)
+                )
+                if len(values) > 1
+                else 0.0
+            )
+            margin = 1.96 * standard_deviation / sqrt(len(values))
+            summary[f"{metric}_mean"] = mean_value
+            summary[f"{metric}_sd"] = standard_deviation
+            summary[f"{metric}_ci95_low"] = mean_value - margin
+            summary[f"{metric}_ci95_high"] = mean_value + margin
+        summaries.append(summary)
+    return summaries

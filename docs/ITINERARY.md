@@ -41,8 +41,8 @@ remaining days for final packaging and submission.
 - [x] Verify at least 10 complete references and the technical comparison for
       each related-work item.
 - [x] Confirm every cited work appears in the references and vice versa.
-- [x] Proofread the editable source and rendered `litsurvey.pdf`; course upload
-      remains a team submission step.
+- [x] Proofread the editable source and rendered `CSCE642_LitSurvey.pdf`;
+      course upload remains a team submission step.
 
 ## Week 2 — Environment and tests (Nov 2–8)
 
@@ -63,29 +63,29 @@ remaining days for final packaging and submission.
 ### Issue: Establish fair controller baselines and evaluation metrics
 **Target date:** Nov 15 · **Suggested labels:** `baseline`, `experiment`, `tests`
 
-- [ ] Implement random-action and deadband controllers.
-- [ ] Implement scheduled setback if the agreed core is complete; otherwise
+- [x] Implement random-action and deadband controllers.
+- [x] Implement scheduled setback if the agreed core is complete; otherwise
       record it as deferred and keep the first comparison focused.
-- [ ] Run each baseline in the same scenarios with the same evaluation seeds.
-- [ ] Calculate energy cost, comfort degree-hours, occupied comfort
+- [x] Run each baseline in the same scenarios with the same evaluation seeds.
+- [x] Calculate energy cost, comfort degree-hours, occupied comfort
       percentage, and HVAC mode changes.
-- [ ] Add arrival-temperature deficit and pre-transition energy metrics if
+- [x] Add arrival-temperature deficit and pre-transition energy metrics if
       their definitions are stable.
-- [ ] Save a small baseline results table and at least one sanity-check plot.
+- [x] Save a baseline results table and sanity-check plot.
 
 ## Week 4 — Q-learning (Nov 16–22)
 
 ### Issue: Train and evaluate the tabular Q-learning controller
 **Target date:** Nov 22 · **Suggested labels:** `agent`, `tests`, `experiment`
 
-- [ ] Implement the Q-learning update and epsilon-greedy selection.
-- [ ] Add a documented exploration schedule and load hyperparameters from the
+- [x] Implement the Q-learning update and epsilon-greedy selection.
+- [x] Add a documented exploration schedule and load hyperparameters from the
       experiment configuration.
-- [ ] Seed environment and agent randomness; test deterministic short runs.
-- [ ] Track learning curves and ensure evaluation runs do not explore.
-- [ ] Compare the trained policy with deadband and random controllers on shared
+- [x] Seed environment and agent randomness; test deterministic short runs.
+- [x] Track learning curves and ensure evaluation runs do not explore.
+- [x] Compare the trained policy with deadband and random controllers on shared
       scenarios and seeds.
-- [ ] Investigate state-table coverage and report if discretization prevents
+- [x] Investigate state-table coverage and report if discretization prevents
       useful learning.
 
 ## Week 5 — Experiments, analysis, and report-ready evidence (Nov 23–29)
@@ -93,25 +93,25 @@ remaining days for final packaging and submission.
 ### Issue: Run the primary controlled experiment
 **Target date:** Nov 26 · **Suggested labels:** `experiment`
 
-- [ ] Select one focused question, such as changing the energy/comfort reward
+- [x] Select one focused question, such as changing the energy/comfort reward
       weights or insulation quality.
-- [ ] Predefine scenarios, training settings, and held-out evaluation seeds.
-- [ ] Run enough seeds to report variability; retain machine-readable results.
-- [ ] Produce a controller comparison and a trade-off plot with clear labels
+- [x] Predefine scenarios, training settings, and held-out evaluation seeds.
+- [x] Run enough seeds to report variability; retain machine-readable results.
+- [x] Produce a controller comparison and a trade-off plot with clear labels
       and units.
-- [ ] Inspect both improvements and failures; do not omit negative results.
+- [x] Inspect both improvements and failures; do not omit negative results.
 
 ### Issue: Freeze reproducible results and assemble the final handoff
 **Target date:** Nov 29 · **Suggested labels:** `writing`, `experiment`
 
-- [ ] Confirm a clean setup and rerun tests from the documented instructions.
-- [ ] Ensure result tables/figures can be regenerated from saved settings and
+- [x] Confirm a clean setup and rerun tests from the documented instructions.
+- [x] Ensure result tables/figures can be regenerated from saved settings and
       commands.
-- [ ] Update the README and guide to match the implemented commands and
+- [x] Update the README and guide to match the implemented commands and
       measured behavior.
-- [ ] Draft report sections for method, experiment, results, limitations, and
-      individual contribution summaries.
-- [ ] Record remaining work for Nov 30–Dec 4: final report, five-minute video,
+- [x] Draft report sections for method, experiment, results, and limitations.
+- [ ] Each teammate must supply their own individual contribution summary.
+- [x] Record remaining work for Nov 30–Dec 4: final report, five-minute video,
       repository link, proofreading, and Canvas submission.
 
 ## GitHub issue tracking
