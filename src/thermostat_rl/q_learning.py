@@ -142,3 +142,86 @@ def train_q_learning(
         epsilon = max(config.epsilon_min, epsilon * config.epsilon_decay)
 
     return agent, history
+
+
+class TabularQLearning:
+    """State-key based Q-learning API contributed for the Week 4 deliverable."""
+
+    def __init__(self, config: ExperimentConfig) -> None:
+        config.validate()
+        self.config = config
+        self.random_num = np.random.default_rng(config.seed)
+        self.epsilon = config.epsilon_start
+        self.q_table: dict[StateKey, np.ndarray] = {}
+
+    def state_qValues(self, state: StateKey) -> np.ndarray:
+        """Return the state's action values, initializing unseen states to zero."""
+        if state not in self.q_table:
+            self.q_table[state] = np.zeros(len(HVACAction))
+        return self.q_table[state]
+
+    def select_action(self, state: StateKey) -> HVACAction:
+        """Select an action using this agent's epsilon-greedy policy."""
+        q_values = self.state_qValues(state)
+        if self.random_num.random() < self.epsilon:
+            return HVACAction(int(self.random_num.integers(len(HVACAction))))
+        return HVACAction(int(np.argmax(q_values)))
+
+    def update_qValue(
+        self,
+        state: StateKey,
+        action: HVACAction,
+        reward: float,
+        next_state: StateKey,
+        terminal_state: bool = False,
+    ) -> None:
+        """Apply one tabular Q-learning update."""
+        current_values = self.state_qValues(state)
+        next_values = self.state_qValues(next_state)
+        bootstrap = 0.0 if terminal_state else float(np.max(next_values))
+        action_index = int(action)
+        current_values[action_index] += self.config.learning_rate * (
+            reward
+            + self.config.discount_factor * bootstrap
+            - current_values[action_index]
+        )
+
+    def update_epsilon_decay(self) -> None:
+        """Decay exploration to its configured minimum."""
+        self.epsilon = max(
+            self.config.epsilon_min, self.epsilon * self.config.epsilon_decay
+        )
+
+    def train_QLearning_episode(
+        self, environment: ThermostatEnv, seed: int | None = None
+    ) -> float:
+        """Train one episode and decay exploration once after the episode."""
+        observation, _ = environment.reset(seed=seed)
+        state = discretize_observation(observation, self.config)
+        episode_return = 0.0
+
+        for _ in range(self.config.steps_per_episode):
+            action = self.select_action(state)
+            observation, reward, terminated, truncated, _ = environment.step(action)
+            next_state = discretize_observation(observation, self.config)
+            self.update_qValue(
+                state,
+                action,
+                reward,
+                next_state,
+                terminal_state=terminated or truncated,
+            )
+            episode_return += reward
+            state = next_state
+            if terminated or truncated:
+                self.update_epsilon_decay()
+                return episode_return
+
+        raise RuntimeError("training episode did not terminate within its step limit")
+
+    def train_QLearning(self, environment: ThermostatEnv) -> list[float]:
+        """Train for the configured episode count using reproducible reset seeds."""
+        return [
+            self.train_QLearning_episode(environment, seed=self.config.seed + episode)
+            for episode in range(self.config.episodes)
+        ]
